@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iNaturalist Metadata Tool</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    h1 { text-align: center; }
+    textarea { width: 100%; height: 150px; margin-bottom: 1rem; }
+    button { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; }
+    #status { margin-top: 1rem; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>iNaturalist Metadata Tool</h1>
+  <p>Paste a list of iNaturalist observation IDs (one per line). Then click <b>Fetch Data</b> to generate a CSV you can download.</p>
+
+  <textarea id="idInput" placeholder="Enter observation IDs, one per line..."></textarea>
+  <br>
+  <button onclick="fetchData()">Fetch Data</button>
+  <div id="status"></div>
+
+  <script>
+    async function fetchData() {
+      const ids = document.getElementById('idInput').value
+        .split(/\s+/)
+        .map(id => id.trim())
+        .filter(id => id.length > 0);
+
+      if (ids.length === 0) {
+        alert("Please enter at least one observation ID.");
+        return;
+      }
+
+      document.getElementById('status').textContent = "Fetching data for " + ids.length + " observations...";
+
+      const rows = [];
+
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i];
+        try {
+          const res = await fetch(`https://api.inaturalist.org/v1/observations/${id}`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+          const data = await res.json();
+          if (!data.results || data.results.length === 0) {
+            rows.push({id, error: "No data"});
+            continue;
+          }
+
+          const obs = data.results[0];
+          const row = {
+            id: obs.id || "",
+            scientificName: obs.taxon?.name || "",
+            commonName: obs.taxon?.preferred_common_name || "",
+            observedOn: obs.observed_on || obs.created_at || "",
+            location: obs.place_guess || "",
+            latitude: obs.location ? obs.location.split(",")[0] : "",
+            longitude: obs.location ? obs.location.split(",")[1] : "",
+            observer: obs.user?.name || obs.user?.login || "",
+            quality: obs.quality_grade || "",
+            url: `https://www.inaturalist.org/observations/${obs.id}`
+          };
+          rows.push(row);
+
+          document.getElementById('status').textContent = `Fetched ${i+1}/${ids.length}`;
+        } catch (e) {
+          rows.push({id, error: e.message});
+        }
+      }
+
+      downloadCSV(rows);
+      document.getElementById('status').textContent += "\nDone!";
+    }
+
+    function downloadCSV(rows) {
+      if (!rows || rows.length === 0) return;
+
+      const headers = Object.keys(rows[0]);
+      const csvContent = [headers.join(",")]
+        .concat(rows.map(r => headers.map(h => '"' + (r[h] || "") + '"').join(",")))
+        .join("\n");
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "inat_metadata.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  </script>
+</body>
+</html>
