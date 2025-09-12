@@ -24,7 +24,8 @@
     <b>How it works:</b> Paste one iNaturalist observation ID per line (you can also paste full observation URLs).
     Click <b>Fetch Data</b>. The tool calls the iNaturalist API in your browser, maps fields to your specimen schema,
     and lets you download a <b>CSV</b> or <b>Excel (.xlsx)</b> file. Optional: toggle <b>Reverse Geocoding</b> to fill
-    County/Municipality/Locality (slower; rate‑limited).
+    County/Municipality/Locality (slower; rate‑limited). When geocoding is off, it still parses common US formats
+    like <i>"Alachua County, FL, USA"</i> to populate <b>County</b> and <b>stateprovince</b>.
   </p>
   <p class="muted">
     <b>Habitat & Substrate (optional):</b> To populate these columns, add Observation Fields on each iNat observation named
@@ -128,6 +129,34 @@
       return '';
     }
 
+    function parsePlaceGuessFallback(place_guess) {
+      // Heuristics for common US pattern like: "Gainesville, Alachua County, FL, USA" or "Alachua County, FL, USA"
+      const out = { country: '', state: '', county: '', municipality: '' };
+      if (!place_guess) return out;
+      const parts = place_guess.split(',').map(p => p.trim()).filter(Boolean);
+      if (parts.length === 0) return out;
+
+      // Country detection
+      const countryIdx = parts.findIndex(p => /^(USA|United States|United States of America)$/i.test(p));
+      if (countryIdx !== -1) out.country = 'USA';
+
+      // State is usually the part before the country token, if present
+      if (countryIdx > 0) {
+        out.state = parts[countryIdx - 1] || '';
+      }
+
+      // County/Parish/Borough: pick the first part that contains those words
+      const countyPart = parts.find(p => /(County|Parish|Borough)$/i.test(p));
+      if (countyPart) out.county = countyPart;
+
+      // Municipality (optional): pick a city/town/village-looking first token that is not county/state/country
+      const excluded = new Set([out.state, out.county, 'USA', 'United States', 'United States of America']);
+      const muniCandidate = parts.find(p => !excluded.has(p) && !/^(\w{2})$/.test(p)); // skip 2-letter states
+      if (muniCandidate) out.municipality = muniCandidate;
+
+      return out;
+    }
+
     async function buildRowFromObservation(obs, doGeocode) {
       const id = obs.id || '';
       const taxon = obs.taxon || {};
@@ -150,21 +179,26 @@
 
       const place_guess = obs.place_guess || '';
 
-      // Optional reverse geocoding
-      let geoCountry = 'USA';
-      let geoState = '';
-      let geoCounty = '';
-      let geoMunicipality = '';
+      // Fallback parsing from place_guess to fill US-style County/State when geocoding is off
+      const pgFallback = parsePlaceGuessFallback(place_guess);
+
+      // Start with fallback values; optionally override with reverse geocoding
+      let geoCountry = pgFallback.country || '';
+      let geoState = pgFallback.state || '';
+      let geoCounty = pgFallback.county || '';
+      let geoMunicipality = pgFallback.municipality || '';
       let geocodedLocality = '';
+
+      // Optional reverse geocoding (overrides when available)
       if (doGeocode && latitude && longitude) {
         try {
           const geo = await reverseGeocodeNominatim(latitude, longitude);
           if (geo) {
-            geoCountry = geo.country || geoCountry;
-            geoState = geo.state || '';
-            geoCounty = geo.county || '';
-            geoMunicipality = geo.municipality || '';
-            geocodedLocality = geo.locality || '';
+            if (geo.country) geoCountry = geo.country;
+            if (geo.state) geoState = geo.state;
+            if (geo.county) geoCounty = geo.county;
+            if (geo.municipality) geoMunicipality = geo.municipality;
+            if (geo.locality) geocodedLocality = geo.locality;
           }
           await sleep(1100); // be polite to Nominatim
         } catch (_) {}
@@ -189,7 +223,7 @@
         year: year,
         month: month,
         day: day,
-        Country: geoCountry,
+        Country: geoCountry || (place_guess.includes('USA') || place_guess.includes('United States') ? 'USA' : ''),
         stateprovince: geoState,
         County: geoCounty,
         Locality: place_guess,
@@ -208,13 +242,6 @@
         AssociatedMedia: id ? `https://www.inaturalist.org/observations/${id}` : '',
         GeocodedLocality: geocodedLocality
       });
-    }
-
-    function rowWithDefaults(overrides = {}) {
-      const row = {};
-      for (const key of FIELDNAMES) row[key] = '';
-      Object.assign(row, overrides);
-      return row;
     }
 
     async function reverseGeocodeNominatim(lat, lon) {
