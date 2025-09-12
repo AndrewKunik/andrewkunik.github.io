@@ -322,14 +322,23 @@
 
     function downloadXLSX(rows) {
       if (!rows || rows.length === 0 || typeof XLSX === 'undefined') return;
-      // Ensure consistent column order
+      console.log('Downloading XLSX with field order:', FIELDNAMES);
+      // Ensure consistent column order by creating new objects with correct field order
       const normalized = rows.map(r => {
-        const o = {}; FIELDNAMES.forEach(k => o[k] = r[k] ?? ''); return o;
+        const o = {};
+        FIELDNAMES.forEach(k => {
+          o[k] = r[k] ?? '';
+          if (k === 'VerbatimAttributes' && r[k]) {
+            console.log('VerbatimAttributes value:', r[k]); // Debug VerbatimAttributes specifically
+          }
+        });
+        return o;
       });
+      console.log('Sample normalized row:', normalized[0]);
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.json_to_sheet(normalized, { header: FIELDNAMES });
       XLSX.utils.book_append_sheet(wb, ws, 'Specimens');
-      XLSX.writeFile(wb, 'inat_specimens.xlsx');
+      XLSX.writeFile(wb, 'inat_specimens_v2.xlsx');
     }
 
     function csvEscape(value) {
