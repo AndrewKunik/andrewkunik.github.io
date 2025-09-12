@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -33,7 +32,7 @@
     (Collector field number is read from <code>Collector Field Number</code> if present.)
   </p>
 
-  <textarea id="idInput" placeholder="123456789\nhttps://www.inaturalist.org/observations/654321\n... one per line"></textarea>
+  <textarea id="idInput" placeholder="123456789&#10;https://www.inaturalist.org/observations/654321&#10;... one per line"></textarea>
 
   <div class="controls">
     <button id="runBtn">Fetch Data</button>
@@ -151,31 +150,53 @@
 
       const place_guess = obs.place_guess || '';
 
-      // Optional reverse geocoding
+      // Initialize geocoding variables with default values
       let geoCountry = 'USA';
       let geoState = '';
       let geoCounty = '';
       let geoMunicipality = '';
       let geocodedLocality = '';
+
+      // Try to extract basic location info from iNaturalist place_guess if available
+      if (place_guess && !doGeocode) {
+        // Simple parsing of place_guess to extract state/county if possible
+        const parts = place_guess.split(',').map(p => p.trim());
+        if (parts.length >= 2) {
+          // Last part is often country, second to last is often state
+          if (parts[parts.length - 1].toLowerCase().includes('us') || parts[parts.length - 1].toLowerCase() === 'united states') {
+            geoCountry = 'USA';
+            if (parts.length >= 2) {
+              geoState = parts[parts.length - 2];
+            }
+            if (parts.length >= 3) {
+              geoCounty = parts[parts.length - 3];
+            }
+          }
+        }
+      }
+
+      // Optional reverse geocoding (overrides basic parsing)
       if (doGeocode && latitude && longitude) {
         try {
           const geo = await reverseGeocodeNominatim(latitude, longitude);
           if (geo) {
             geoCountry = geo.country || geoCountry;
-            geoState = geo.state || '';
-            geoCounty = geo.county || '';
-            geoMunicipality = geo.municipality || '';
-            geocodedLocality = geo.locality || '';
+            geoState = geo.state || geoState;
+            geoCounty = geo.county || geoCounty;
+            geoMunicipality = geo.municipality || geoMunicipality;
+            geocodedLocality = geo.locality || geocodedLocality;
           }
           await sleep(1100); // be polite to Nominatim
-        } catch (_) {}
+        } catch (e) {
+          console.warn('Geocoding failed:', e);
+        }
       }
 
       const habitat = findObservationFieldValue(ofvs, 'Habitat');
       const substrate = findObservationFieldValue(ofvs, 'Fungus Substrate/Host');
       const collector_number = findObservationFieldValue(ofvs, 'Collector Field Number');
 
-      return rowWithDefaults({
+      const row = rowWithDefaults({
         scientificName: taxon.name || '',
         'Uploaded to Mycoportal (date)': '',
         AssociatedSequences: '',
@@ -209,6 +230,11 @@
         AssociatedMedia: id ? `https://www.inaturalist.org/observations/${id}` : '',
         GeocodedLocality: geocodedLocality
       });
+
+      // Debug logging to verify the data is being set
+      console.log(`Observation ${id}: State="${geoState}", County="${geoCounty}"`);
+      
+      return row;
     }
 
     function rowWithDefaults(overrides = {}) {
@@ -226,13 +252,19 @@
       url.searchParams.set('addressdetails', '1');
       url.searchParams.set('zoom', '16');
       const res = await fetch(url.toString(), { headers: { 'Accept': 'application/json' } });
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`Geocoding failed: ${res.status}`);
       const data = await res.json();
       const addr = data.address || {};
+      
+      // More comprehensive state extraction
+      const state = addr.state || addr.province || addr.region || '';
+      // More comprehensive county extraction
+      const county = addr.county || addr.administrative_area_level_2 || '';
+      
       return {
         country: addr.country || '',
-        state: addr.state || '',
-        county: addr.county || '',
+        state: state,
+        county: county,
         municipality: addr.city || addr.town || addr.village || addr.municipality || addr.suburb || addr.hamlet || '',
         locality: addr.leisure || addr.tourism || addr.natural || addr.landuse || addr.amenity || addr.place || addr.suburb || addr.neighbourhood || addr.hamlet || addr.road || ''
       };
