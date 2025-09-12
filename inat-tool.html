@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -24,8 +25,7 @@
     <b>How it works:</b> Paste one iNaturalist observation ID per line (you can also paste full observation URLs).
     Click <b>Fetch Data</b>. The tool calls the iNaturalist API in your browser, maps fields to your specimen schema,
     and lets you download a <b>CSV</b> or <b>Excel (.xlsx)</b> file. Optional: toggle <b>Reverse Geocoding</b> to fill
-    County/Municipality/Locality (slower; rate‑limited). When geocoding is off, it still parses common US formats
-    like <i>"Alachua County, FL, USA"</i> to populate <b>County</b> and <b>stateprovince</b>.
+    County/Municipality/Locality (slower; rate‑limited).
   </p>
   <p class="muted">
     <b>Habitat & Substrate (optional):</b> To populate these columns, add Observation Fields on each iNat observation named
@@ -91,15 +91,14 @@
       for (let i = 0; i < ids.length; i++) {
         const id = ids[i];
         try {
-          status.textContent = `Fetching ${i + 1}/${ids.length}: ${id}`;
-          const obs = await fetchObservation(id, 15000);
+          const obs = await fetchObservation(id);
           if (!obs) {
-            rows.push(rowWithDefaults({ OtherCatalogNumbers: `iNaturalist #${id}`, AssociatedMedia: `https://www.inaturalist.org/observations/${id}`, occurrenceremarks: 'No data returned' }));
+            rows.push(rowWithDefaults({ OtherCatalogNumbers: `iNaturalist #${id}`, AssociatedMedia: `https://www.inaturalist.org/observations/${id}` }));
           } else {
             const row = await buildRowFromObservation(obs, doGeocode);
             rows.push(row);
           }
-          // Gentle pacing to be polite to APIs
+          status.textContent = `Fetched ${i + 1}/${ids.length}`;
           if (i < ids.length - 1) await sleep(500);
         } catch (e) {
           rows.push(rowWithDefaults({ OtherCatalogNumbers: `iNaturalist #${id}`, AssociatedMedia: `https://www.inaturalist.org/observations/${id}`, occurrenceremarks: `Error: ${e.message}` }));
@@ -109,28 +108,15 @@
       gRows = rows; // store for downloads
       document.getElementById('csvBtn').disabled = rows.length === 0;
       document.getElementById('xlsxBtn').disabled = rows.length === 0;
-      status.textContent = `Done. ${rows.length} row(s) ready.`;
+      status.textContent += '\nReady to download.';
     }
 
-    async function fetchObservation(id, timeoutMs) {
+    async function fetchObservation(id) {
       const url = `https://api.inaturalist.org/v1/observations/${encodeURIComponent(id)}`;
-      try {
-        const data = await fetchJSON(url, timeoutMs);
-        if (!data || !data.results || !data.results[0]) return null;
-        return data.results[0];
-      } catch (e) {
-        return null;
-      }
-    }
-
-    async function fetchJSON(url, timeoutMs = 15000) {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort('timeout'), timeoutMs);
-      try {
-        const res = await fetch(url, { signal: ctrl.signal, mode: 'cors', headers: { 'Accept': 'application/json' } });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
-      } finally { clearTimeout(t); }
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (data && data.results && data.results[0]) ? data.results[0] : null;
     }
 
     function findObservationFieldValue(ofvs, name) {
@@ -141,34 +127,6 @@
         if (n === lower) return ofv.value || '';
       }
       return '';
-    }
-
-    function parsePlaceGuessFallback(place_guess) {
-      // Heuristics for common US pattern like: "Gainesville, Alachua County, FL, USA" or "Alachua County, FL, USA"
-      const out = { country: '', state: '', county: '', municipality: '' };
-      if (!place_guess) return out;
-      const parts = place_guess.split(',').map(p => p.trim()).filter(Boolean);
-      if (parts.length === 0) return out;
-
-      // Country detection
-      const countryIdx = parts.findIndex(p => /^(USA|United States|United States of America)$/i.test(p));
-      if (countryIdx !== -1) out.country = 'USA';
-
-      // State is usually the part before the country token, if present
-      if (countryIdx > 0) {
-        out.state = parts[countryIdx - 1] || '';
-      }
-
-      // County/Parish/Borough: pick the first part that contains those words
-      const countyPart = parts.find(p => /(County|Parish|Borough)$/i.test(p));
-      if (countyPart) out.county = countyPart;
-
-      // Municipality (optional): pick a city/town/village-looking first token that is not county/state/country
-      const excluded = new Set([out.state, out.county, 'USA', 'United States', 'United States of America']);
-      const muniCandidate = parts.find(p => !excluded.has(p) && !/^(\w{2})$/.test(p)); // skip 2-letter states
-      if (muniCandidate) out.municipality = muniCandidate;
-
-      return out;
     }
 
     async function buildRowFromObservation(obs, doGeocode) {
@@ -193,27 +151,21 @@
 
       const place_guess = obs.place_guess || '';
 
-      // Fallback parsing from place_guess to fill US-style County/State when geocoding is off
-      const pgFallback = parsePlaceGuessFallback(place_guess);
-
-      // Start with fallback values; optionally override with reverse geocoding
-      let geoCountry = pgFallback.country || '';
-      let geoState = pgFallback.state || '';
-      let geoCounty = pgFallback.county || '';
-      let geoMunicipality = pgFallback.municipality || '';
+      // Optional reverse geocoding
+      let geoCountry = 'USA';
+      let geoState = '';
+      let geoCounty = '';
+      let geoMunicipality = '';
       let geocodedLocality = '';
-
-      // Optional reverse geocoding (overrides when available)
       if (doGeocode && latitude && longitude) {
         try {
-          const data = await fetchJSON(`https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&zoom=16&lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`, 12000);
-          if (data && data.address) {
-            const addr = data.address;
-            geoCountry = addr.country || geoCountry;
-            geoState = addr.state || geoState;
-            geoCounty = addr.county || geoCounty;
-            geoMunicipality = addr.city || addr.town || addr.village || addr.municipality || addr.suburb || addr.hamlet || geoMunicipality;
-            geocodedLocality = addr.leisure || addr.tourism || addr.natural || addr.landuse || addr.amenity || addr.place || addr.suburb || addr.neighbourhood || addr.hamlet || addr.road || geocodedLocality;
+          const geo = await reverseGeocodeNominatim(latitude, longitude);
+          if (geo) {
+            geoCountry = geo.country || geoCountry;
+            geoState = geo.state || '';
+            geoCounty = geo.county || '';
+            geoMunicipality = geo.municipality || '';
+            geocodedLocality = geo.locality || '';
           }
           await sleep(1100); // be polite to Nominatim
         } catch (_) {}
@@ -238,7 +190,7 @@
         year: year,
         month: month,
         day: day,
-        Country: geoCountry || (place_guess.includes('USA') || place_guess.includes('United States') ? 'USA' : ''),
+        Country: geoCountry,
         stateprovince: geoState,
         County: geoCounty,
         Locality: place_guess,
@@ -257,6 +209,33 @@
         AssociatedMedia: id ? `https://www.inaturalist.org/observations/${id}` : '',
         GeocodedLocality: geocodedLocality
       });
+    }
+
+    function rowWithDefaults(overrides = {}) {
+      const row = {};
+      for (const key of FIELDNAMES) row[key] = '';
+      Object.assign(row, overrides);
+      return row;
+    }
+
+    async function reverseGeocodeNominatim(lat, lon) {
+      const url = new URL('https://nominatim.openstreetmap.org/reverse');
+      url.searchParams.set('lat', String(lat));
+      url.searchParams.set('lon', String(lon));
+      url.searchParams.set('format', 'json');
+      url.searchParams.set('addressdetails', '1');
+      url.searchParams.set('zoom', '16');
+      const res = await fetch(url.toString(), { headers: { 'Accept': 'application/json' } });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const addr = data.address || {};
+      return {
+        country: addr.country || '',
+        state: addr.state || '',
+        county: addr.county || '',
+        municipality: addr.city || addr.town || addr.village || addr.municipality || addr.suburb || addr.hamlet || '',
+        locality: addr.leisure || addr.tourism || addr.natural || addr.landuse || addr.amenity || addr.place || addr.suburb || addr.neighbourhood || addr.hamlet || addr.road || ''
+      };
     }
 
     function downloadCSV(rows) {
