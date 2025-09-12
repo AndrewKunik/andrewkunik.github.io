@@ -91,14 +91,15 @@
       for (let i = 0; i < ids.length; i++) {
         const id = ids[i];
         try {
-          const obs = await fetchObservation(id);
+          status.textContent = `Fetching ${i + 1}/${ids.length}: ${id}`;
+          const obs = await fetchObservation(id, 15000);
           if (!obs) {
-            rows.push(rowWithDefaults({ OtherCatalogNumbers: `iNaturalist #${id}`, AssociatedMedia: `https://www.inaturalist.org/observations/${id}` }));
+            rows.push(rowWithDefaults({ OtherCatalogNumbers: `iNaturalist #${id}`, AssociatedMedia: `https://www.inaturalist.org/observations/${id}`, occurrenceremarks: 'No data returned' }));
           } else {
             const row = await buildRowFromObservation(obs, doGeocode);
             rows.push(row);
           }
-          status.textContent = `Fetched ${i + 1}/${ids.length}`;
+          // Gentle pacing to be polite to APIs
           if (i < ids.length - 1) await sleep(500);
         } catch (e) {
           rows.push(rowWithDefaults({ OtherCatalogNumbers: `iNaturalist #${id}`, AssociatedMedia: `https://www.inaturalist.org/observations/${id}`, occurrenceremarks: `Error: ${e.message}` }));
@@ -108,15 +109,28 @@
       gRows = rows; // store for downloads
       document.getElementById('csvBtn').disabled = rows.length === 0;
       document.getElementById('xlsxBtn').disabled = rows.length === 0;
-      status.textContent += '\nReady to download.';
+      status.textContent = `Done. ${rows.length} row(s) ready.`;
     }
 
-    async function fetchObservation(id) {
+    async function fetchObservation(id, timeoutMs) {
       const url = `https://api.inaturalist.org/v1/observations/${encodeURIComponent(id)}`;
-      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-      if (!res.ok) return null;
-      const data = await res.json();
-      return (data && data.results && data.results[0]) ? data.results[0] : null;
+      try {
+        const data = await fetchJSON(url, timeoutMs);
+        if (!data || !data.results || !data.results[0]) return null;
+        return data.results[0];
+      } catch (e) {
+        return null;
+      }
+    }
+
+    async function fetchJSON(url, timeoutMs = 15000) {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort('timeout'), timeoutMs);
+      try {
+        const res = await fetch(url, { signal: ctrl.signal, mode: 'cors', headers: { 'Accept': 'application/json' } });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      } finally { clearTimeout(t); }
     }
 
     function findObservationFieldValue(ofvs, name) {
@@ -192,13 +206,14 @@
       // Optional reverse geocoding (overrides when available)
       if (doGeocode && latitude && longitude) {
         try {
-          const geo = await reverseGeocodeNominatim(latitude, longitude);
-          if (geo) {
-            if (geo.country) geoCountry = geo.country;
-            if (geo.state) geoState = geo.state;
-            if (geo.county) geoCounty = geo.county;
-            if (geo.municipality) geoMunicipality = geo.municipality;
-            if (geo.locality) geocodedLocality = geo.locality;
+          const data = await fetchJSON(`https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&zoom=16&lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`, 12000);
+          if (data && data.address) {
+            const addr = data.address;
+            geoCountry = addr.country || geoCountry;
+            geoState = addr.state || geoState;
+            geoCounty = addr.county || geoCounty;
+            geoMunicipality = addr.city || addr.town || addr.village || addr.municipality || addr.suburb || addr.hamlet || geoMunicipality;
+            geocodedLocality = addr.leisure || addr.tourism || addr.natural || addr.landuse || addr.amenity || addr.place || addr.suburb || addr.neighbourhood || addr.hamlet || addr.road || geocodedLocality;
           }
           await sleep(1100); // be polite to Nominatim
         } catch (_) {}
@@ -242,26 +257,6 @@
         AssociatedMedia: id ? `https://www.inaturalist.org/observations/${id}` : '',
         GeocodedLocality: geocodedLocality
       });
-    }
-
-    async function reverseGeocodeNominatim(lat, lon) {
-      const url = new URL('https://nominatim.openstreetmap.org/reverse');
-      url.searchParams.set('lat', String(lat));
-      url.searchParams.set('lon', String(lon));
-      url.searchParams.set('format', 'json');
-      url.searchParams.set('addressdetails', '1');
-      url.searchParams.set('zoom', '16');
-      const res = await fetch(url.toString(), { headers: { 'Accept': 'application/json' } });
-      if (!res.ok) return null;
-      const data = await res.json();
-      const addr = data.address || {};
-      return {
-        country: addr.country || '',
-        state: addr.state || '',
-        county: addr.county || '',
-        municipality: addr.city || addr.town || addr.village || addr.municipality || addr.suburb || addr.hamlet || '',
-        locality: addr.leisure || addr.tourism || addr.natural || addr.landuse || addr.amenity || addr.place || addr.suburb || addr.neighbourhood || addr.hamlet || addr.road || ''
-      };
     }
 
     function downloadCSV(rows) {
