@@ -292,12 +292,21 @@
 
     function downloadXLSX(rows) {
       if (!rows || rows.length === 0 || typeof XLSX === 'undefined') return;
+      
       // Ensure consistent column order
       const normalized = rows.map(r => {
         const o = {}; FIELDNAMES.forEach(k => o[k] = r[k] ?? ''); return o;
       });
+      
+      // Create array with two header rows + data
+      const allData = [
+        FIELDNAMES,
+        FIELD_DESCRIPTIONS,
+        ...normalized.map(row => FIELDNAMES.map(field => row[field]))
+      ];
+      
       const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(normalized, { header: FIELDNAMES });
+      const ws = XLSX.utils.aoa_to_sheet(allData);
       XLSX.utils.book_append_sheet(wb, ws, 'Specimens');
       XLSX.writeFile(wb, 'inat_specimens.xlsx');
     }
