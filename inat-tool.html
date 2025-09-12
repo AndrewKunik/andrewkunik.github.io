@@ -7,6 +7,7 @@
   <style>
     body { font-family: Arial, sans-serif; margin: 2rem; line-height: 1.45; }
     h1 { text-align: center; margin-bottom: 0.25rem; }
+    .version-banner { background: linear-gradient(90deg, #4CAF50, #45a049); color: white; padding: 8px 16px; border-radius: 4px; margin-bottom: 16px; font-weight: bold; text-align: center; }
     .muted { color: #555; font-size: 0.95rem; }
     textarea { width: 100%; height: 150px; margin: 0.75rem 0 1rem; }
     .controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.5rem; }
@@ -20,6 +21,9 @@
 </head>
 <body>
   <h1>iNaturalist Metadata Tool</h1>
+  <div class="version-banner">
+    ✅ UPDATED VERSION 2.0 - New Column Order & Enhanced Features
+  </div>
   <p class="muted">
     <b>How it works:</b> Paste one iNaturalist observation ID per line (you can also paste full observation URLs).
     Click <b>Fetch Data</b>. The tool calls the iNaturalist API in your browser, maps fields to your specimen schema,
@@ -48,15 +52,13 @@
 
   <script>
     const FIELDNAMES = [
-      'catalognumber', 'scientificName', 'Uploaded to Mycoportal (date)',
-      'AssociatedSequences', 'Label Printed', 'identificationqualifier',
-      'OtherCatalogNumbers', 'recordNumber', 'typeStatus', 'recordedBy',
-      'identifiedBY', 'verbatimeventdate', 'year', 'month', 'day',
-      'Country', 'stateprovince', 'County', 'Locality', 'Municipality',
-      'Habitat', 'Substrate', 'Host', 'decimalLatitude', 'decimalLongitude',
-      'VerbatimLatitude', 'VerbatimLongitude', 'georeferencedby',
-      'occurrenceremarks', 'Elevation', 'LifeStage', 'AssociatedMedia',
-      'GeocodedLocality'
+      'catalognumber', 'scientificName', 'identificationqualifier', 'Uploaded to Mycoportal (date)',
+      'Label Printed', 'AssociatedSequences', 'VerbatimAttributes', 'OtherCatalogNumbers',
+      'recordNumber', 'typeStatus', 'recordedBy', 'identifiedBY',
+      'verbatimeventdate', 'year', 'month', 'day', 'Country', 'stateprovince',
+      'County', 'Locality', 'Municipality', 'Habitat', 'Substrate', 'Host',
+      'decimalLatitude', 'decimalLongitude', 'VerbatimLatitude', 'VerbatimLongitude',
+      'georeferencedby', 'occurrenceremarks', 'Elevation', 'LifeStage', 'GeocodedLocality'
     ];
 
     let gRows = [];
@@ -84,7 +86,7 @@
 
       const doGeocode = document.getElementById('geoToggle').checked;
       const status = document.getElementById('status');
-      status.textContent = `Fetching ${ids.length} observation(s)...`;
+      status.textContent = `[v2.0] Fetching ${ids.length} observation(s)...`;
 
       const rows = [];
       for (let i = 0; i < ids.length; i++) {
@@ -92,22 +94,32 @@
         try {
           const obs = await fetchObservation(id);
           if (!obs) {
-            rows.push(rowWithDefaults({ OtherCatalogNumbers: `iNaturalist #${id}`, AssociatedMedia: `https://www.inaturalist.org/observations/${id}` }));
+            rows.push(rowWithDefaults({ OtherCatalogNumbers: `iNaturalist #${id}` }));
           } else {
             const row = await buildRowFromObservation(obs, doGeocode);
             rows.push(row);
           }
-          status.textContent = `Fetched ${i + 1}/${ids.length}`;
+          status.textContent = `[v2.0] Fetched ${i + 1}/${ids.length}`;
           if (i < ids.length - 1) await sleep(500);
         } catch (e) {
-          rows.push(rowWithDefaults({ OtherCatalogNumbers: `iNaturalist #${id}`, AssociatedMedia: `https://www.inaturalist.org/observations/${id}`, occurrenceremarks: `Error: ${e.message}` }));
+          rows.push(rowWithDefaults({ OtherCatalogNumbers: `iNaturalist #${id}`, occurrenceremarks: `Error: ${e.message}` }));
         }
       }
 
       gRows = rows; // store for downloads
       document.getElementById('csvBtn').disabled = rows.length === 0;
       document.getElementById('xlsxBtn').disabled = rows.length === 0;
-      status.textContent += '\nReady to download.';
+      
+      // Debug output to verify column order
+      if (rows.length > 0) {
+        const sampleRow = rows[0];
+        const actualColumns = Object.keys(sampleRow);
+        console.log('Expected column order:', FIELDNAMES);
+        console.log('Actual columns in data:', actualColumns);
+        console.log('Sample row data:', sampleRow);
+      }
+      
+      status.textContent += '\n[v2.0] Ready to download.';
     }
 
     async function fetchObservation(id) {
@@ -116,6 +128,19 @@
       if (!res.ok) return null;
       const data = await res.json();
       return (data && data.results && data.results[0]) ? data.results[0] : null;
+    }
+
+    async function fetchObservationComments(id) {
+      try {
+        const url = `https://api.inaturalist.org/v1/comments?parent_type=Observation&parent_id=${encodeURIComponent(id)}`;
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.results || [];
+      } catch (e) {
+        console.warn('Failed to fetch comments for observation', id, e);
+        return [];
+      }
     }
 
     function findObservationFieldValue(ofvs, name) {
@@ -266,7 +291,7 @@
       });
 
       // Debug logging to verify the data is being set
-      console.log(`Observation ${id}: State="${geoState}", County="${geoCounty}"`);
+      console.log(`Observation ${id}: State="${geoState}", County="${geoCounty}", VerbatimAttributes="${row.VerbatimAttributes}"`);
       
       return row;
     }
@@ -306,16 +331,22 @@
 
     function downloadCSV(rows) {
       if (!rows || rows.length === 0) return;
+      console.log('Downloading CSV with field order:', FIELDNAMES);
       const headers = FIELDNAMES;
       const csvLines = [headers.join(',')];
       for (const r of rows) {
-        const line = headers.map(h => csvEscape(r[h] ?? '')).join(',');
+        const line = headers.map(h => {
+          const value = r[h] ?? '';
+          return csvEscape(value);
+        }).join(',');
         csvLines.push(line);
       }
+      console.log('CSV Headers:', headers);
+      console.log('First data row:', csvLines[1]);
       const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = 'inat_specimens.csv';
+      a.href = url; a.download = 'inat_specimens_v2.csv';
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }
