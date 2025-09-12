@@ -1,95 +1,127 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Andrew Kunik – Biology researcher and photographer">
-  <title>Andrew Kunik</title>
-  <link rel="icon" href="favicon.ico" type="image/x-icon">
-  <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-    header { background: #333; color: white; padding: 1rem; text-align: center; }
-    header img { border-radius: 50%; max-width: 150px; display: block; margin: 0 auto; }
-    nav { margin-top: 1rem; }
-    nav a { color: white; margin: 0 1rem; text-decoration: none; }
-    section { padding: 2rem; }
-    .slideshow-container { position: relative; max-width: 800px; margin: auto; }
-    .slides { display: none; }
-    .prev, .next {
-      cursor: pointer; position: absolute; top: 50%; width: auto; padding: 16px;
-      margin-top: -22px; color: white; font-weight: bold; font-size: 18px;
-      transition: 0.6s ease; border-radius: 0 3px 3px 0; user-select: none;
-      background-color: rgba(0,0,0,0.5);
-    }
-    .next { right: 0; border-radius: 3px 0 0 3px; }
-    footer { background: #333; color: white; text-align: center; padding: 1rem; margin-top: 2rem; }
-  </style>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <meta name="description" content="Andrew Kunik – Biology researcher and photographer">
+ <title>Andrew Kunik</title>
+ <link rel="icon" href="favicon.ico" type="image/x-icon">
+ <style>
+ body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+ header { 
+   background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('aleinabductionpipette.jpg');
+   background-size: cover;
+   background-position: center;
+   background-attachment: fixed;
+   color: white;
+   padding: 4rem 1rem;
+   text-align: center;
+   min-height: 50vh;
+   display: flex;
+   flex-direction: column;
+   justify-content: center;
+ }
+ header h1 {
+   font-size: 3rem;
+   margin: 0;
+   text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+ }
+ header p {
+   font-size: 1.5rem;
+   margin: 1rem 0;
+   text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+ }
+ nav { margin-top: 2rem; }
+ nav a { 
+   color: white; 
+   margin: 0 1rem; 
+   text-decoration: none; 
+   padding: 0.5rem 1rem;
+   background: rgba(255,255,255,0.2);
+   border-radius: 5px;
+   transition: background 0.3s ease;
+   text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+ }
+ nav a:hover {
+   background: rgba(255,255,255,0.3);
+ }
+ section { padding: 2rem; }
+ .slideshow-container { position: relative; max-width: 800px; margin: auto; }
+ .slides { display: none; }
+ .prev, .next {
+ cursor: pointer; position: absolute; top: 50%; width: auto; padding: 16px;
+ margin-top: -22px; color: white; font-weight: bold; font-size: 18px;
+ transition: 0.6s ease; border-radius: 0 3px 3px 0; user-select: none;
+ background-color: rgba(0,0,0,0.5);
+ }
+ .next { right: 0; border-radius: 3px 0 0 3px; }
+ footer { background: #333; color: white; text-align: center; padding: 1rem; margin-top: 2rem; }
+ </style>
 </head>
 <body>
-  <header>
-    <img src="armscrossedprofile.jpg" alt="Profile picture of Andrew Kunik">
-    <h1>Andrew Kunik</h1>
-    <p>Biology Researcher & Photographer</p>
-    <nav>
-      <a href="#about">About</a>
-      <a href="#gallery">Gallery</a>
-      <a href="#contact">Contact</a>
-      <a href="inat-tool.html">iNat Tool</a>
-    </nav>
-  </header>
+ <header>
+ <h1>Andrew Kunik</h1>
+ <p>Biology Researcher & Photographer</p>
+ <nav>
+ <a href="#about">About</a>
+ <a href="#gallery">Gallery</a>
+ <a href="#contact">Contact</a>
+ <a href="inat-tool.html">iNat Tool</a>
+ </nav>
+ </header>
 
-  <section id="about">
-    <h2>About Me</h2>
-    <p>Hello! I’m Andrew, a biology researcher focused on fungi and plants. This site showcases some of my photography and research interests.</p>
-  </section>
+ <section id="about">
+ <h2>About Me</h2>
+ <p>Hello! I'm Andrew, a biology researcher focused on fungi and plants. This site showcases some of my photography and research interests.</p>
+ </section>
 
-  <section id="gallery">
-    <h2>Gallery</h2>
-    <div class="slideshow-container">
-      <div class="slides">
-        <img src="img1.jpg" alt="Gallery image 1" style="width:100%">
-      </div>
-      <div class="slides">
-        <img src="img2.jpg" alt="Gallery image 2" style="width:100%">
-      </div>
-      <div class="slides">
-        <img src="img3.jpg" alt="Gallery image 3" style="width:100%">
-      </div>
+ <section id="gallery">
+ <h2>Gallery</h2>
+ <div class="slideshow-container">
+ <div class="slides">
+ <img src="img1.jpg" alt="Gallery image 1" style="width:100%">
+ </div>
+ <div class="slides">
+ <img src="img2.jpg" alt="Gallery image 2" style="width:100%">
+ </div>
+ <div class="slides">
+ <img src="img3.jpg" alt="Gallery image 3" style="width:100%">
+ </div>
 
-      <a class="prev" aria-label="Previous slide" onclick="plusSlides(-1)">&#10094;</a>
-      <a class="next" aria-label="Next slide" onclick="plusSlides(1)">&#10095;</a>
-    </div>
-  </section>
+ <a class="prev" aria-label="Previous slide" onclick="plusSlides(-1)">&#10094;</a>
+ <a class="next" aria-label="Next slide" onclick="plusSlides(1)">&#10095;</a>
+ </div>
+ </section>
 
-  <section id="contact">
-    <h2>Contact</h2>
-    <p>Email: <a href="mailto:andrew@example.com">andrew@example.com</a></p>
-    <p><a href="https://github.com/andrewkunik">GitHub</a> | <a href="https://andrewkunik.github.io/">Website</a></p>
-  </section>
+ <section id="contact">
+ <h2>Contact</h2>
+ <p>Email: <a href="mailto:andrew@example.com">andrew@example.com</a></p>
+ <p><a href="https://github.com/andrewkunik">GitHub</a> | <a href="https://andrewkunik.github.io/">Website</a></p>
+ </section>
 
-  <footer>
-    <p>&copy; 2025 Andrew Kunik</p>
-  </footer>
+ <footer>
+ <p>&copy; 2025 Andrew Kunik</p>
+ </footer>
 
-  <script>
-    let slideIndex = 0;
-    showSlides();
+ <script>
+ let slideIndex = 0;
+ showSlides();
 
-    function plusSlides(n) {
-      slideIndex += n - 1; // adjust index so showSlides increments properly
-      showSlides();
-    }
+ function plusSlides(n) {
+ slideIndex += n - 1; // adjust index so showSlides increments properly
+ showSlides();
+ }
 
-    function showSlides() {
-      let slides = document.getElementsByClassName("slides");
-      for (let i = 0; i < slides.length; i++) {
-        slides[i].style.display = "none";
-      }
-      slideIndex++;
-      if (slideIndex > slides.length) { slideIndex = 1; }
-      if (slideIndex < 1) { slideIndex = slides.length; }
-      slides[slideIndex-1].style.display = "block";
-    }
-  </script>
+ function showSlides() {
+ let slides = document.getElementsByClassName("slides");
+ for (let i = 0; i < slides.length; i++) {
+ slides[i].style.display = "none";
+ }
+ slideIndex++;
+ if (slideIndex > slides.length) { slideIndex = 1; }
+ if (slideIndex < 1) { slideIndex = slides.length; }
+ slides[slideIndex-1].style.display = "block";
+ }
+ </script>
 </body>
 </html>
