@@ -31,10 +31,6 @@
     exactly <code>Habitat</code> and <code>Fungus Substrate/Host</code>. The tool reads those field values automatically.
     (Collector field number is read from <code>Collector Field Number</code> if present.)
   </p>
-  <p class="muted">
-    <b>Output format:</b> The CSV/Excel files will match your FLAS specimen format exactly, with the iNaturalist observation
-    link automatically formatted for the VerbatimAttributes column as a clickable HTML link.
-  </p>
 
   <textarea id="idInput" placeholder="123456789&#10;https://www.inaturalist.org/observations/654321&#10;... one per line"></textarea>
 
@@ -196,16 +192,51 @@
         }
       }
 
+      // Fetch comments and build comprehensive occurrence remarks
+      let occurrenceRemarks = '';
+      try {
+        const comments = await fetchObservationComments(id);
+        let remarksComponents = [];
+        
+        // Add observation description if present
+        if (obs.description && obs.description.trim()) {
+          remarksComponents.push(`Observation notes: ${obs.description.trim()}`);
+        }
+        
+        // Add comments from users
+        if (comments && comments.length > 0) {
+          const commentTexts = comments
+            .filter(comment => comment.body && comment.body.trim())
+            .map(comment => {
+              const author = comment.user ? (comment.user.name || comment.user.login || 'Unknown user') : 'Unknown user';
+              const date = comment.created_at ? new Date(comment.created_at).toLocaleDateString() : '';
+              return `${author}${date ? ` (${date})` : ''}: ${comment.body.trim()}`;
+            });
+          
+          if (commentTexts.length > 0) {
+            remarksComponents.push(`Comments: ${commentTexts.join(' | ')}`);
+          }
+        }
+        
+        occurrenceRemarks = remarksComponents.join(' || ');
+        await sleep(300); // brief pause after fetching comments
+      } catch (e) {
+        console.warn('Failed to build occurrence remarks:', e);
+        occurrenceRemarks = obs.description || '';
+      }
+
       const habitat = findObservationFieldValue(ofvs, 'Habitat');
       const substrate = findObservationFieldValue(ofvs, 'Fungus Substrate/Host');
       const collector_number = findObservationFieldValue(ofvs, 'Collector Field Number');
 
       const row = rowWithDefaults({
+        catalognumber: '',
         scientificName: taxon.name || '',
-        'Uploaded to Mycoportal (date)': '',
-        AssociatedSequences: '',
-        'Label Printed': '',
         identificationqualifier: '',
+        'Uploaded to Mycoportal (date)': '',
+        'Label Printed': '',
+        AssociatedSequences: '',
+        VerbatimAttributes: id ? `<a href='https://www.inaturalist.org/observations/${id}' target='_blank' style='color: blue;'> Original observation #${id}(iNaturalist)</a>` : '',
         OtherCatalogNumbers: id ? `iNaturalist #${id}` : '',
         recordNumber: collector_number,
         typeStatus: '',
@@ -228,10 +259,9 @@
         VerbatimLatitude: '',
         VerbatimLongitude: '',
         georeferencedby: '',
-        occurrenceremarks: obs.description || '',
+        occurrenceremarks: occurrenceRemarks,
         Elevation: '',
         LifeStage: '',
-        AssociatedMedia: id ? `https://www.inaturalist.org/observations/${id}` : '',
         GeocodedLocality: geocodedLocality
       });
 
@@ -292,21 +322,12 @@
 
     function downloadXLSX(rows) {
       if (!rows || rows.length === 0 || typeof XLSX === 'undefined') return;
-      
       // Ensure consistent column order
       const normalized = rows.map(r => {
         const o = {}; FIELDNAMES.forEach(k => o[k] = r[k] ?? ''); return o;
       });
-      
-      // Create array with two header rows + data
-      const allData = [
-        FIELDNAMES,
-        FIELD_DESCRIPTIONS,
-        ...normalized.map(row => FIELDNAMES.map(field => row[field]))
-      ];
-      
       const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet(allData);
+      const ws = XLSX.utils.json_to_sheet(normalized, { header: FIELDNAMES });
       XLSX.utils.book_append_sheet(wb, ws, 'Specimens');
       XLSX.writeFile(wb, 'inat_specimens.xlsx');
     }
