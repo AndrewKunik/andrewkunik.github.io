@@ -61,6 +61,12 @@
             gap: 10px;
         }
 
+        .section h3 {
+            color: #555;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+
         .tabs {
             display: flex;
             gap: 10px;
@@ -114,6 +120,24 @@
             transform: scale(1.02);
         }
 
+        .file-upload-area.green {
+            background: #f0fff4;
+            border-color: #28a745;
+        }
+
+        .file-upload-area.green:hover {
+            background: #e8ffe8;
+        }
+
+        .file-upload-area.yellow {
+            background: #fffef0;
+            border-color: #ffc107;
+        }
+
+        .file-upload-area.yellow:hover {
+            background: #fffce0;
+        }
+
         .file-upload-area input[type="file"] {
             display: none;
         }
@@ -122,6 +146,14 @@
             font-size: 48px;
             color: #667eea;
             margin-bottom: 15px;
+        }
+
+        .upload-icon.green {
+            color: #28a745;
+        }
+
+        .upload-icon.yellow {
+            color: #ffc107;
         }
 
         .file-list {
@@ -137,6 +169,16 @@
             justify-content: space-between;
             align-items: center;
             animation: slideIn 0.3s ease;
+        }
+
+        .file-item.genbank {
+            background: #f0fff4;
+            border-left: 4px solid #28a745;
+        }
+
+        .file-item.local {
+            background: #fffef0;
+            border-left: 4px solid #ffc107;
         }
 
         .file-item button {
@@ -186,22 +228,6 @@
             transition: all 0.3s;
         }
 
-        textarea {
-            width: 100%;
-            min-height: 300px;
-            padding: 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            resize: vertical;
-        }
-
-        textarea:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
         .progress-section {
             display: none;
             margin-top: 30px;
@@ -229,6 +255,23 @@
             justify-content: center;
             color: white;
             font-weight: 600;
+        }
+
+        .status-message {
+            color: #555;
+            margin-bottom: 10px;
+        }
+
+        .log-area {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-top: 15px;
         }
 
         .results-section {
@@ -296,24 +339,31 @@
         }
 
         .stat-card {
-            background: #f8f9ff;
             padding: 20px;
             border-radius: 8px;
             text-align: center;
+        }
+
+        .stat-card.blue {
+            background: #f8f9ff;
+        }
+
+        .stat-card.green {
+            background: #f0fff4;
+        }
+
+        .stat-card.yellow {
+            background: #fffef0;
+        }
+
+        .stat-card.red {
+            background: #fff0f0;
         }
 
         .stat-value {
             font-size: 2rem;
             font-weight: bold;
             color: #667eea;
-        }
-
-        .example-box {
-            background: #f8f9ff;
-            border-left: 4px solid #667eea;
-            padding: 15px;
-            margin: 15px 0;
-            border-radius: 4px;
         }
 
         .code-block {
@@ -324,6 +374,7 @@
             overflow-x: auto;
             font-family: 'Courier New', monospace;
             font-size: 14px;
+            margin: 15px 0;
         }
 
         @keyframes fadeIn {
@@ -369,25 +420,25 @@
     <div class="container">
         <div class="header">
             <h1>🧬 GenBank Metadata Extractor</h1>
-            <p>Process FASTA sequences and extract/organize metadata</p>
+            <p>Extract comprehensive metadata from FASTA sequences using GenBank records</p>
         </div>
 
         <div class="main-card">
             <div class="tabs">
-                <button class="tab active" onclick="switchTab('method1')">Method 1: Automatic Parsing</button>
-                <button class="tab" onclick="switchTab('method2')">Method 2: Paste GenBank Data</button>
+                <button class="tab active" onclick="switchTab('enhanced')">Enhanced Processing</button>
+                <button class="tab" onclick="switchTab('quick')">Quick Parse</button>
                 <button class="tab" onclick="switchTab('instructions')">Instructions</button>
             </div>
 
-            <!-- Method 1: Automatic Parsing -->
-            <div id="method1" class="tab-content active">
+            <!-- Enhanced Processing Tab -->
+            <div id="enhanced" class="tab-content active">
                 <div class="alert alert-info">
-                    <strong>ℹ️ Automatic Mode:</strong> This method parses sequence IDs and extracts available information without accessing NCBI. 
-                    Perfect for local sequences or when you don't need full GenBank metadata.
+                    <strong>✨ Enhanced Mode:</strong> Upload your FASTA files along with GenBank records (.gb files) downloaded from NCBI. 
+                    Also supports local unpublished GenBank files for sequences not yet in the public database.
                 </div>
 
                 <div class="section">
-                    <h2>📁 Upload FASTA Files</h2>
+                    <h2>📁 Step 1: Upload FASTA Files</h2>
                     <div class="file-upload-area" id="uploadArea">
                         <div class="upload-icon">📤</div>
                         <p><strong>Drop FASTA files here or click to browse</strong></p>
@@ -397,8 +448,37 @@
                     <div class="file-list" id="fileList"></div>
                 </div>
 
-                <div style="text-align: center; margin-top: 20px;">
-                    <button class="btn-primary" id="processBtn" disabled onclick="processAutomatic()">
+                <div class="section">
+                    <h2>📗 Step 2: Upload GenBank Records (Downloaded from NCBI)</h2>
+                    <div class="alert alert-success">
+                        <strong>How to get .gb files:</strong> Search your accession numbers on <a href="https://www.ncbi.nlm.nih.gov/nuccore/" target="_blank">NCBI Nucleotide</a>, 
+                        select "GenBank (full)" from the dropdown, then click "Send to: File" to download.
+                    </div>
+                    <div class="file-upload-area green" id="genbankArea">
+                        <div class="upload-icon green">📑</div>
+                        <p><strong>Drop .gb files here or click to browse</strong></p>
+                        <p style="color: #888; margin-top: 10px;">Files downloaded from NCBI</p>
+                        <input type="file" id="genbankInput" multiple accept=".gb,.gbk,.txt">
+                    </div>
+                    <div class="file-list" id="genbankList"></div>
+                </div>
+
+                <div class="section">
+                    <h2>📙 Step 3: Upload Local/Unpublished GenBank Files (Optional)</h2>
+                    <div class="alert alert-warning">
+                        <strong>Optional:</strong> Add GenBank flatfiles for unpublished sequences. These will be checked first before using the NCBI downloads.
+                    </div>
+                    <div class="file-upload-area yellow" id="localArea">
+                        <div class="upload-icon yellow">📂</div>
+                        <p><strong>Drop local GenBank files here</strong></p>
+                        <p style="color: #888; margin-top: 10px;">For unpublished sequences</p>
+                        <input type="file" id="localInput" multiple accept=".gb,.gbk,.txt">
+                    </div>
+                    <div class="file-list" id="localList"></div>
+                </div>
+
+                <div style="text-align: center; margin-top: 30px;">
+                    <button class="btn-primary" id="processBtn" disabled onclick="processEnhanced()">
                         Process Files
                     </button>
                     <button class="btn-secondary" onclick="clearAll()">
@@ -407,40 +487,25 @@
                 </div>
             </div>
 
-            <!-- Method 2: Manual GenBank Data -->
-            <div id="method2" class="tab-content">
-                <div class="alert alert-warning">
-                    <strong>⚠️ Manual Mode:</strong> This method requires you to manually fetch GenBank records from NCBI and paste them here.
-                    This avoids CORS issues but requires more manual work.
+            <!-- Quick Parse Tab -->
+            <div id="quick" class="tab-content">
+                <div class="alert alert-info">
+                    <strong>⚡ Quick Mode:</strong> Parse sequence IDs without GenBank data. Extracts species names and basic metadata from the FASTA headers.
                 </div>
 
                 <div class="section">
-                    <h2>Step 1: Upload FASTA File</h2>
-                    <div class="file-upload-area" id="uploadArea2">
-                        <div class="upload-icon">📄</div>
-                        <p><strong>Upload your FASTA file</strong></p>
-                        <input type="file" id="fileInput2" accept=".fasta,.fa,.txt">
+                    <h2>Upload FASTA Files</h2>
+                    <div class="file-upload-area" id="quickArea">
+                        <div class="upload-icon">⚡</div>
+                        <p><strong>Drop FASTA files for quick parsing</strong></p>
+                        <input type="file" id="quickInput" multiple accept=".fasta,.fa,.txt">
                     </div>
-                    <div id="sequenceList"></div>
-                </div>
-
-                <div class="section">
-                    <h2>Step 2: Paste GenBank Records</h2>
-                    <p>Copy the accession numbers above, go to <a href="https://www.ncbi.nlm.nih.gov/nuccore/" target="_blank">NCBI Nucleotide</a>, 
-                    search for each one, select "GenBank (full)" format, and paste the records below:</p>
-                    <textarea id="genbankData" placeholder="Paste GenBank records here...
-
-LOCUS       MN206892                1234 bp    DNA     linear   PLN 01-JAN-2020
-DEFINITION  Gymnopilus species isolate...
-...
-//
-
-(You can paste multiple records separated by //)"></textarea>
+                    <div class="file-list" id="quickList"></div>
                 </div>
 
                 <div style="text-align: center; margin-top: 20px;">
-                    <button class="btn-primary" onclick="processManual()">
-                        Process GenBank Data
+                    <button class="btn-primary" id="quickBtn" disabled onclick="processQuick()">
+                        Quick Parse
                     </button>
                 </div>
             </div>
@@ -450,65 +515,61 @@ DEFINITION  Gymnopilus species isolate...
                 <h2>📖 How to Use This Tool</h2>
                 
                 <div class="section">
-                    <h3>Method 1: Automatic Parsing (Recommended for Quick Results)</h3>
+                    <h3>🌟 Enhanced Processing (Recommended)</h3>
                     <ol style="line-height: 1.8;">
-                        <li>Upload your FASTA files using drag-and-drop or the browse button</li>
-                        <li>Click "Process Files" to automatically parse sequence identifiers</li>
-                        <li>Download results as CSV or JSON</li>
-                    </ol>
-                    <div class="example-box">
-                        <strong>What this extracts:</strong>
-                        <ul style="margin-top: 10px;">
-                            <li>Species names from sequence IDs (e.g., "G_subdryophilus" → "Gymnopilus subdryophilus")</li>
-                            <li>Collection numbers and voucher specimens</li>
-                            <li>Type specimen status if indicated in ID</li>
-                            <li>Basic metadata from sequence naming patterns</li>
-                        </ul>
-                    </div>
-                </div>
-
-                <div class="section">
-                    <h3>Method 2: Manual GenBank Import (For Complete Metadata)</h3>
-                    <ol style="line-height: 1.8;">
-                        <li>Upload your FASTA file to see the list of GenBank accessions</li>
-                        <li>Copy each accession number (e.g., MN206892)</li>
-                        <li>Go to <a href="https://www.ncbi.nlm.nih.gov/nuccore/" target="_blank">NCBI Nucleotide Database</a></li>
-                        <li>Search for the accession and select "GenBank (full)" format</li>
-                        <li>Copy the entire GenBank record and paste it in the text area</li>
-                        <li>Repeat for all sequences or paste multiple records at once</li>
-                        <li>Click "Process GenBank Data"</li>
+                        <li><strong>Upload FASTA files</strong> - Your sequence files</li>
+                        <li><strong>Get GenBank records:</strong>
+                            <ul style="margin: 10px 0 10px 20px;">
+                                <li>Copy accession numbers from your FASTA (e.g., MN206892.1)</li>
+                                <li>Go to <a href="https://www.ncbi.nlm.nih.gov/nuccore/" target="_blank">NCBI Nucleotide</a></li>
+                                <li>Paste accessions in search box (can search multiple at once)</li>
+                                <li>Select "GenBank (full)" from the Display dropdown</li>
+                                <li>Click "Send to" → "File" → "Create File"</li>
+                                <li>Upload the downloaded .gb file(s) here</li>
+                            </ul>
+                        </li>
+                        <li><strong>Add local files</strong> (optional) - For unpublished sequences</li>
+                        <li><strong>Click Process</strong> - Get complete metadata extraction</li>
                     </ol>
                 </div>
 
                 <div class="section">
-                    <h3>🔧 For Developers: API Access</h3>
-                    <p>To enable automatic NCBI fetching, you'll need to set up a backend API. Here's an example:</p>
+                    <h3>⚡ Quick Parse Mode</h3>
+                    <p>For rapid processing without GenBank lookups. Extracts:</p>
+                    <ul style="margin: 10px 0 10px 20px;">
+                        <li>Species names from IDs (e.g., "G_subdryophilus" → "Gymnopilus subdryophilus")</li>
+                        <li>Type specimen indicators</li>
+                        <li>Collection numbers</li>
+                        <li>Basic metadata patterns</li>
+                    </ul>
+                </div>
+
+                <div class="section">
+                    <h3>📊 Output Files</h3>
+                    <p>The tool generates CSV and JSON files containing:</p>
                     <div class="code-block">
-// Vercel API Route (api/genbank.js)
-export default async function handler(req, res) {
-  const { accession, email } = req.query;
-  const url = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&id=${accession}&rettype=gb&retmode=text&email=${email}`;
-  
-  const response = await fetch(url);
-  const data = await response.text();
-  
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.status(200).send(data);
-}
+Fasta ID              - Original sequence identifier
+Species Name          - Scientific name
+GenBank Accession     - NCBI accession number  
+Location              - Collection location details
+Type Status           - Holotype, Paratype, etc.
+Collection Info       - Voucher/specimen data
+Collection Date       - When collected
+Collected By          - Collector name
+Isolation Source      - Host/substrate
+Reference             - Publication citation
+Bibliography          - Full citation
+Notes                 - Additional information
                     </div>
                 </div>
 
                 <div class="section">
-                    <h3>📊 Output Format</h3>
-                    <p>The tool generates CSV and JSON files with the following fields:</p>
-                    <ul style="line-height: 1.6;">
-                        <li><strong>Fasta ID:</strong> Original sequence identifier</li>
-                        <li><strong>Species Name:</strong> Organism name</li>
-                        <li><strong>GenBank Accession:</strong> NCBI accession number</li>
-                        <li><strong>Location:</strong> Collection location</li>
-                        <li><strong>Type Status:</strong> If it's a type specimen</li>
-                        <li><strong>Collection Info:</strong> Voucher/specimen information</li>
-                        <li><strong>And more...</strong> (dates, collectors, references, etc.)</li>
+                    <h3>💡 Tips</h3>
+                    <ul style="line-height: 1.8;">
+                        <li>You can download multiple GenBank records at once from NCBI</li>
+                        <li>Local GenBank files are checked first, then NCBI downloads</li>
+                        <li>The tool preserves the original FASTA sequence order</li>
+                        <li>Works offline once GenBank files are uploaded</li>
                     </ul>
                 </div>
             </div>
@@ -519,27 +580,45 @@ export default async function handler(req, res) {
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressFill">0%</div>
                 </div>
-                <div id="statusMessage" style="color: #666; margin-top: 10px;"></div>
+                <div class="status-message" id="statusMessage">Initializing...</div>
+                <div class="log-area" id="logArea"></div>
             </div>
 
             <!-- Results Section -->
             <div class="results-section" id="resultsSection">
                 <h2>📊 Results</h2>
                 
-                <div class="stats-grid" id="statsGrid"></div>
+                <div class="stats-grid">
+                    <div class="stat-card blue">
+                        <div class="stat-value" id="statTotal">0</div>
+                        <div>Total Sequences</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-value" id="statGenBank" style="color: #28a745;">0</div>
+                        <div>With GenBank Data</div>
+                    </div>
+                    <div class="stat-card yellow">
+                        <div class="stat-value" id="statLocal" style="color: #ffc107;">0</div>
+                        <div>From Local Files</div>
+                    </div>
+                    <div class="stat-card red">
+                        <div class="stat-value" id="statType" style="color: #dc3545;">0</div>
+                        <div>Type Specimens</div>
+                    </div>
+                </div>
                 
                 <h3>Data Preview</h3>
                 <div class="data-table" id="dataPreview"></div>
                 
                 <div style="text-align: center; margin-top: 30px;">
                     <button class="btn-primary" onclick="downloadCSV()">
-                        Download CSV
+                        📊 Download CSV
                     </button>
                     <button class="btn-primary" onclick="downloadJSON()">
-                        Download JSON
+                        📋 Download JSON
                     </button>
                     <button class="btn-secondary" onclick="clearAll()">
-                        Process New Files
+                        🔄 Process New Files
                     </button>
                 </div>
             </div>
@@ -547,31 +626,51 @@ export default async function handler(req, res) {
     </div>
 
     <script>
+        // Global variables
         let fastaFiles = [];
+        let genbankFiles = [];
+        let localFiles = [];
+        let quickFiles = [];
         let currentResults = [];
         let currentFileName = '';
+        let localRecords = {};
+        let ncbiRecords = {};
 
-        // Setup event listeners
-        document.getElementById('uploadArea').addEventListener('click', () => {
-            document.getElementById('fileInput').click();
-        });
+        // Initialize event listeners
+        function initializeEventListeners() {
+            // Enhanced mode uploads
+            setupFileUpload('uploadArea', 'fileInput', (files) => {
+                fastaFiles = Array.from(files).filter(f => f.name.match(/\.(fasta|fa|txt)$/i));
+                updateFileList('fileList', fastaFiles, 'fasta');
+                checkProcessButton();
+            });
 
-        document.getElementById('uploadArea2').addEventListener('click', () => {
-            document.getElementById('fileInput2').click();
-        });
+            setupFileUpload('genbankArea', 'genbankInput', (files) => {
+                genbankFiles = Array.from(files).filter(f => f.name.match(/\.(gb|gbk|txt)$/i));
+                updateFileList('genbankList', genbankFiles, 'genbank');
+            });
 
-        document.getElementById('fileInput').addEventListener('change', (e) => {
-            handleFiles(e.target.files);
-        });
+            setupFileUpload('localArea', 'localInput', (files) => {
+                localFiles = Array.from(files).filter(f => f.name.match(/\.(gb|gbk|txt)$/i));
+                updateFileList('localList', localFiles, 'local');
+            });
 
-        document.getElementById('fileInput2').addEventListener('change', (e) => {
-            handleManualFile(e.target.files[0]);
-        });
+            // Quick mode upload
+            setupFileUpload('quickArea', 'quickInput', (files) => {
+                quickFiles = Array.from(files).filter(f => f.name.match(/\.(fasta|fa|txt)$/i));
+                updateFileList('quickList', quickFiles, 'fasta');
+                document.getElementById('quickBtn').disabled = quickFiles.length === 0;
+            });
+        }
 
-        // Drag and drop
-        ['uploadArea', 'uploadArea2'].forEach(id => {
-            const area = document.getElementById(id);
-            
+        function setupFileUpload(areaId, inputId, callback) {
+            const area = document.getElementById(areaId);
+            const input = document.getElementById(inputId);
+
+            area.addEventListener('click', () => input.click());
+            input.addEventListener('change', (e) => callback(e.target.files));
+
+            // Drag and drop
             area.addEventListener('dragover', (e) => {
                 e.preventDefault();
                 area.classList.add('dragging');
@@ -584,14 +683,56 @@ export default async function handler(req, res) {
             area.addEventListener('drop', (e) => {
                 e.preventDefault();
                 area.classList.remove('dragging');
-                
-                if (id === 'uploadArea') {
-                    handleFiles(e.dataTransfer.files);
-                } else {
-                    handleManualFile(e.dataTransfer.files[0]);
-                }
+                callback(e.dataTransfer.files);
             });
-        });
+        }
+
+        function updateFileList(listId, files, type) {
+            const list = document.getElementById(listId);
+            list.innerHTML = '';
+
+            files.forEach((file, index) => {
+                const item = document.createElement('div');
+                item.className = `file-item ${type}`;
+                
+                let icon = '📄';
+                if (type === 'genbank') icon = '📗';
+                if (type === 'local') icon = '📙';
+                
+                item.innerHTML = `
+                    <span>${icon} ${file.name} (${formatFileSize(file.size)})</span>
+                    <button onclick="removeFile('${type}', ${index})">Remove</button>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        function removeFile(type, index) {
+            switch(type) {
+                case 'fasta':
+                    fastaFiles.splice(index, 1);
+                    updateFileList('fileList', fastaFiles, 'fasta');
+                    checkProcessButton();
+                    break;
+                case 'genbank':
+                    genbankFiles.splice(index, 1);
+                    updateFileList('genbankList', genbankFiles, 'genbank');
+                    break;
+                case 'local':
+                    localFiles.splice(index, 1);
+                    updateFileList('localList', localFiles, 'local');
+                    break;
+                case 'quick':
+                    quickFiles.splice(index, 1);
+                    updateFileList('quickList', quickFiles, 'fasta');
+                    document.getElementById('quickBtn').disabled = quickFiles.length === 0;
+                    break;
+            }
+        }
+
+        function checkProcessButton() {
+            document.getElementById('processBtn').disabled = fastaFiles.length === 0;
+        }
 
         function switchTab(tabName) {
             document.querySelectorAll('.tab').forEach(tab => {
@@ -605,64 +746,345 @@ export default async function handler(req, res) {
             document.getElementById(tabName).classList.add('active');
         }
 
-        function handleFiles(files) {
-            fastaFiles = Array.from(files).filter(file => 
-                file.name.match(/\.(fasta|fa|txt)$/i)
-            );
-            updateFileList();
-        }
-
-        function updateFileList() {
-            const fileList = document.getElementById('fileList');
-            fileList.innerHTML = '';
-            
-            fastaFiles.forEach((file, index) => {
-                const item = document.createElement('div');
-                item.className = 'file-item';
-                item.innerHTML = `
-                    <span>📄 ${file.name} (${formatFileSize(file.size)})</span>
-                    <button onclick="removeFile(${index})">Remove</button>
-                `;
-                fileList.appendChild(item);
-            });
-            
-            document.getElementById('processBtn').disabled = fastaFiles.length === 0;
-        }
-
-        function removeFile(index) {
-            fastaFiles.splice(index, 1);
-            updateFileList();
-        }
-
         function formatFileSize(bytes) {
             if (bytes < 1024) return bytes + ' B';
             if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
             return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
         }
 
-        async function handleManualFile(file) {
-            if (!file) return;
+        async function processEnhanced() {
+            showProgress();
+            log('Starting enhanced processing...');
             
-            currentFileName = file.name;
+            localRecords = {};
+            ncbiRecords = {};
+            currentResults = [];
+
+            // Load local GenBank files first
+            if (localFiles.length > 0) {
+                log(`Loading ${localFiles.length} local GenBank file(s)...`);
+                for (const file of localFiles) {
+                    await loadGenBankFile(file, localRecords, 'local');
+                }
+                log(`Loaded ${Object.keys(localRecords).length} local records`);
+            }
+
+            // Load NCBI GenBank files
+            if (genbankFiles.length > 0) {
+                log(`Loading ${genbankFiles.length} NCBI GenBank file(s)...`);
+                for (const file of genbankFiles) {
+                    await loadGenBankFile(file, ncbiRecords, 'ncbi');
+                }
+                log(`Loaded ${Object.keys(ncbiRecords).length} NCBI records`);
+            }
+
+            // Process FASTA files
+            let totalSequences = 0;
+            let processedSequences = 0;
+
+            // Count total
+            for (const file of fastaFiles) {
+                const content = await readFile(file);
+                const sequences = parseFasta(content);
+                totalSequences += sequences.length;
+            }
+
+            // Process each FASTA file
+            for (const file of fastaFiles) {
+                currentFileName = file.name;
+                log(`Processing ${file.name}...`);
+                
+                const content = await readFile(file);
+                const sequences = parseFasta(content);
+
+                for (const seq of sequences) {
+                    processedSequences++;
+                    updateProgress(processedSequences, totalSequences, `Processing ${seq.id}...`);
+
+                    // Try to find metadata in order: local → NCBI → parse ID
+                    let metadata = searchRecords(seq.id, localRecords, 'local');
+                    
+                    if (!metadata) {
+                        metadata = searchRecords(seq.id, ncbiRecords, 'NCBI');
+                    }
+                    
+                    if (!metadata) {
+                        log(`No GenBank record found for ${seq.id}, parsing ID...`);
+                        metadata = parseSequenceId(seq.id);
+                    }
+
+                    currentResults.push(metadata);
+                }
+            }
+
+            log(`Processing complete! Extracted metadata for ${currentResults.length} sequences`);
+            showResults();
+        }
+
+        async function processQuick() {
+            showProgress();
+            currentResults = [];
+
+            for (const file of quickFiles) {
+                currentFileName = file.name;
+                updateStatus(`Quick parsing ${file.name}...`);
+                
+                const content = await readFile(file);
+                const sequences = parseFasta(content);
+
+                sequences.forEach((seq, index) => {
+                    updateProgress(index + 1, sequences.length, `Parsing ${seq.id}...`);
+                    currentResults.push(parseSequenceId(seq.id));
+                });
+            }
+
+            showResults();
+        }
+
+        async function loadGenBankFile(file, storage, source) {
             const content = await readFile(file);
-            const sequences = parseFasta(content);
+            const records = content.split(/\/\/\s*\n/);
             
-            const sequenceList = document.getElementById('sequenceList');
-            sequenceList.innerHTML = '<h3>GenBank Accessions Found:</h3>';
+            for (const record of records) {
+                if (!record.trim()) continue;
+                
+                const metadata = parseGenBankRecord(record);
+                if (metadata.genbank_accession) {
+                    // Store by multiple keys for flexible matching
+                    storage[metadata.genbank_accession] = metadata;
+                    storage[metadata.genbank_accession.split('.')[0]] = metadata;
+                    
+                    // Also store by voucher if available
+                    if (metadata.collection_info) {
+                        const voucher = metadata.collection_info.replace(/\s+/g, '');
+                        storage[voucher] = metadata;
+                    }
+                    
+                    log(`Loaded ${source} record: ${metadata.genbank_accession}`);
+                }
+            }
+        }
+
+        function searchRecords(id, records, source) {
+            // Try various matching strategies
+            const searchKeys = [
+                id,
+                id.split('.')[0],
+                id.replace('-', ''),
+                id.replace('_', ''),
+                id.toUpperCase()
+            ];
+
+            for (const key of searchKeys) {
+                if (records[key]) {
+                    log(`Found in ${source}: ${id} → ${records[key].genbank_accession}`);
+                    const metadata = {...records[key]};
+                    metadata.fasta_id = id; // Preserve original FASTA ID
+                    metadata.notes = `Source: ${source}`;
+                    return metadata;
+                }
+            }
+            return null;
+        }
+
+        function parseGenBankRecord(record) {
+            const metadata = {
+                fasta_id: '',
+                species_name: 'Unknown',
+                collection_info: '',
+                type_status: '',
+                genbank_accession: '',
+                location: '',
+                location_simplified: '',
+                isolation_source: '',
+                collection_date: '',
+                collected_by: '',
+                inat_mo_number: '',
+                notes: '',
+                reference: '',
+                bibliography: ''
+            };
+
+            // Parse ACCESSION
+            const accessionMatch = record.match(/ACCESSION\s+(\S+)/);
+            if (accessionMatch) {
+                metadata.genbank_accession = accessionMatch[1];
+                metadata.fasta_id = accessionMatch[1];
+            }
+
+            // Parse ORGANISM
+            const organismMatch = record.match(/ORGANISM\s+(.+?)(?:\n|$)/);
+            if (organismMatch) {
+                const organism = organismMatch[1].trim();
+                const parts = organism.split(/\s+/);
+                if (parts.length >= 2) {
+                    metadata.species_name = `${parts[0]} ${parts[1]}`;
+                } else {
+                    metadata.species_name = organism;
+                }
+            }
+
+            // Parse features
+            const features = record.match(/FEATURES[^]*?(?=^[A-Z]|\n\/\/|$)/m);
+            if (features) {
+                // Location
+                const locationMatch = features[0].match(/\/geo_loc_name="([^"]+)"/);
+                if (locationMatch) {
+                    metadata.location = locationMatch[1];
+                    metadata.location_simplified = simplifyLocation(locationMatch[1]);
+                } else {
+                    const countryMatch = features[0].match(/\/country="([^"]+)"/);
+                    if (countryMatch) {
+                        metadata.location = countryMatch[1];
+                        metadata.location_simplified = simplifyLocation(countryMatch[1]);
+                    }
+                }
+
+                // Voucher
+                const voucherMatch = features[0].match(/\/specimen_voucher="([^"]+)"/);
+                if (voucherMatch) {
+                    metadata.collection_info = voucherMatch[1];
+                }
+
+                // Collection date
+                const dateMatch = features[0].match(/\/collection_date="([^"]+)"/);
+                if (dateMatch) {
+                    metadata.collection_date = dateMatch[1];
+                }
+
+                // Isolation source
+                const isolationMatch = features[0].match(/\/isolation_source="([^"]+)"/);
+                if (isolationMatch) {
+                    metadata.isolation_source = isolationMatch[1];
+                } else {
+                    const hostMatch = features[0].match(/\/host="([^"]+)"/);
+                    if (hostMatch) {
+                        metadata.isolation_source = `Host: ${hostMatch[1]}`;
+                    }
+                }
+
+                // Collector
+                const collectorMatch = features[0].match(/\/collected_by="([^"]+)"/);
+                if (collectorMatch) {
+                    metadata.collected_by = collectorMatch[1];
+                }
+
+                // Check for type status in various fields
+                const typeStatuses = ['holotype', 'paratype', 'isotype', 'neotype', 'lectotype', 'syntype', 'epitype'];
+                const featureText = features[0].toLowerCase();
+                for (const status of typeStatuses) {
+                    if (featureText.includes(status)) {
+                        metadata.type_status = status.charAt(0).toUpperCase() + status.slice(1);
+                        break;
+                    }
+                }
+
+                // iNaturalist/MO numbers
+                const inatMatch = features[0].match(/inat[^"]*?(\d{5,})/i);
+                if (inatMatch) {
+                    metadata.inat_mo_number = `iNaturalist #${inatMatch[1]}`;
+                }
+            }
+
+            // Parse REFERENCE
+            const refMatch = record.match(/REFERENCE\s+1[^]*?AUTHORS\s+([^\n]+)/);
+            if (refMatch) {
+                const authors = refMatch[1].trim().split(',');
+                const firstAuthor = authors[0].trim();
+                
+                // Look for journal/year
+                const journalMatch = record.match(/JOURNAL\s+([^\n]+(?:\n\s{12}[^\n]+)*)/);
+                if (journalMatch) {
+                    const journal = journalMatch[1].replace(/\n\s+/g, ' ').trim();
+                    const yearMatch = journal.match(/\((\d{4})\)/);
+                    
+                    if (yearMatch) {
+                        metadata.reference = `${firstAuthor} et al. ${yearMatch[1]}`;
+                        metadata.bibliography = `${firstAuthor} et al. (${yearMatch[1]}). ${journal}`;
+                    } else {
+                        metadata.reference = `${firstAuthor} et al.`;
+                        metadata.bibliography = `${firstAuthor} et al. ${journal}`;
+                    }
+                } else {
+                    metadata.reference = `${firstAuthor} et al.`;
+                    metadata.bibliography = `${firstAuthor} et al. (unpublished)`;
+                }
+            }
+
+            return metadata;
+        }
+
+        function parseSequenceId(id) {
+            const metadata = {
+                fasta_id: id,
+                species_name: 'Unknown',
+                collection_info: '',
+                type_status: '',
+                genbank_accession: '',
+                location: '',
+                location_simplified: '',
+                isolation_source: '',
+                collection_date: '',
+                collected_by: '',
+                inat_mo_number: '',
+                notes: 'Parsed from sequence ID',
+                reference: '',
+                bibliography: ''
+            };
+
+            // Check if it's a GenBank accession
+            if (/^[A-Z]+\d+/.test(id)) {
+                metadata.genbank_accession = id;
+                metadata.notes = 'GenBank accession without record';
+            }
+
+            // Parse species name patterns
+            if (id.match(/^G\._([a-z]+)/i)) {
+                const match = id.match(/^G\._([a-z]+)/i);
+                metadata.species_name = `Gymnopilus ${match[1]}`;
+            } else if (id.match(/^G_([a-z]+)/i)) {
+                const match = id.match(/^G_([a-z]+)/i);
+                metadata.species_name = `Gymnopilus ${match[1]}`;
+            } else if (id.includes('Gymnopilus')) {
+                const match = id.match(/Gymnopilus[_\s]+([a-z]+)/i);
+                if (match) {
+                    metadata.species_name = `Gymnopilus ${match[1]}`;
+                }
+            }
+
+            // Check for type status
+            const typeStatuses = ['HOLOTYPE', 'ISOTYPE', 'PARATYPE', 'NEOTYPE', 'LECTOTYPE', 'SYNTYPE', 'EPITYPE'];
+            for (const status of typeStatuses) {
+                if (id.toUpperCase().includes(status)) {
+                    metadata.type_status = status.charAt(0) + status.slice(1).toLowerCase();
+                    break;
+                }
+            }
+
+            // Extract collection numbers
+            const collectionMatch = id.match(/([A-Z]+[-_]?\d{3,})/);
+            if (collectionMatch && !metadata.genbank_accession) {
+                metadata.collection_info = collectionMatch[1];
+            }
+
+            return metadata;
+        }
+
+        function simplifyLocation(location) {
+            if (!location) return '';
             
-            const accessions = sequences
-                .map(seq => seq.id)
-                .filter(id => /^[A-Z]+\d+/.test(id));
+            const parts = location.split(':');
+            if (parts.length < 2) return location;
             
-            if (accessions.length > 0) {
-                sequenceList.innerHTML += '<div class="alert alert-success">Found ' + accessions.length + ' GenBank accessions. Copy these to search on NCBI:</div>';
-                sequenceList.innerHTML += '<div class="code-block">' + accessions.join('\n') + '</div>';
-            } else {
-                sequenceList.innerHTML += '<div class="alert alert-warning">No GenBank accessions found. These appear to be local sequences.</div>';
+            const country = parts[0].trim();
+            const region = parts.length > 1 ? parts[1].trim() : '';
+            
+            if (['USA', 'Canada'].includes(country) && region) {
+                const stateProvince = region.split(',')[0].trim();
+                return `${country}: ${stateProvince}`;
             }
             
-            // Store sequences for later processing
-            window.manualSequences = sequences;
+            return country;
         }
 
         function readFile(file) {
@@ -700,273 +1122,53 @@ export default async function handler(req, res) {
             return sequences;
         }
 
-        async function processAutomatic() {
-            showProgress();
-            currentResults = [];
-            
-            for (const file of fastaFiles) {
-                currentFileName = file.name;
-                updateStatus(`Processing ${file.name}...`);
-                
-                const content = await readFile(file);
-                const sequences = parseFasta(content);
-                
-                sequences.forEach((seq, index) => {
-                    updateProgress(index + 1, sequences.length);
-                    const metadata = parseSequenceId(seq.id);
-                    currentResults.push(metadata);
-                });
-            }
-            
-            showResults();
-        }
-
-        function processManual() {
-            if (!window.manualSequences) {
-                alert('Please upload a FASTA file first');
-                return;
-            }
-            
-            const genbankData = document.getElementById('genbankData').value;
-            if (!genbankData.trim()) {
-                alert('Please paste GenBank records in the text area');
-                return;
-            }
-            
-            showProgress();
-            currentResults = [];
-            
-            // Parse GenBank records
-            const records = genbankData.split(/\/\/\s*\n/);
-            const recordMap = {};
-            
-            records.forEach(record => {
-                if (!record.trim()) return;
-                
-                const accessionMatch = record.match(/ACCESSION\s+(\S+)/);
-                if (accessionMatch) {
-                    const accession = accessionMatch[1];
-                    recordMap[accession] = parseGenBankRecord(record, accession);
-                    recordMap[accession.split('.')[0]] = recordMap[accession];
-                }
-            });
-            
-            // Match sequences with GenBank records
-            window.manualSequences.forEach(seq => {
-                const baseId = seq.id.split('.')[0];
-                if (recordMap[seq.id] || recordMap[baseId]) {
-                    currentResults.push(recordMap[seq.id] || recordMap[baseId]);
-                } else {
-                    // No GenBank record found, parse as local
-                    currentResults.push(parseSequenceId(seq.id));
-                }
-            });
-            
-            showResults();
-        }
-
-        function parseSequenceId(id) {
-            const metadata = {
-                fasta_id: id,
-                species_name: 'Unknown',
-                collection_info: '',
-                type_status: '',
-                genbank_accession: '',
-                location: '',
-                location_simplified: '',
-                isolation_source: '',
-                collection_date: '',
-                collected_by: '',
-                inat_mo_number: '',
-                notes: '',
-                reference: '',
-                bibliography: ''
-            };
-
-            // Check if it's a GenBank accession
-            if (/^[A-Z]+\d+/.test(id)) {
-                metadata.genbank_accession = id;
-                metadata.notes = 'GenBank accession - manual lookup required for full metadata';
-            }
-
-            // Parse species name patterns
-            if (id.match(/^G\._([a-z]+)/i)) {
-                const match = id.match(/^G\._([a-z]+)/i);
-                metadata.species_name = `Gymnopilus ${match[1]}`;
-            } else if (id.match(/^G_([a-z]+)/i)) {
-                const match = id.match(/^G_([a-z]+)/i);
-                metadata.species_name = `Gymnopilus ${match[1]}`;
-            } else if (id.includes('Gymnopilus')) {
-                const match = id.match(/Gymnopilus[_\s]+([a-z]+)/i);
-                if (match) {
-                    metadata.species_name = `Gymnopilus ${match[1]}`;
-                }
-            }
-
-            // Check for type status
-            const typeStatuses = ['HOLOTYPE', 'ISOTYPE', 'PARATYPE', 'NEOTYPE', 'LECTOTYPE', 'SYNTYPE', 'EPITYPE'];
-            for (const status of typeStatuses) {
-                if (id.toUpperCase().includes(status)) {
-                    metadata.type_status = status.charAt(0) + status.slice(1).toLowerCase();
-                    break;
-                }
-            }
-
-            // Extract collection numbers
-            const collectionMatch = id.match(/([A-Z]+[-_]?\d+)/);
-            if (collectionMatch && !metadata.genbank_accession) {
-                metadata.collection_info = collectionMatch[1];
-            }
-
-            return metadata;
-        }
-
-        function parseGenBankRecord(record, fastaId) {
-            const metadata = {
-                fasta_id: fastaId,
-                species_name: 'Unknown',
-                collection_info: '',
-                type_status: '',
-                genbank_accession: fastaId,
-                location: '',
-                location_simplified: '',
-                isolation_source: '',
-                collection_date: '',
-                collected_by: '',
-                inat_mo_number: '',
-                notes: '',
-                reference: '',
-                bibliography: ''
-            };
-
-            // Parse organism
-            const organismMatch = record.match(/ORGANISM\s+(.+?)(?:\n|$)/);
-            if (organismMatch) {
-                const organism = organismMatch[1].trim();
-                const parts = organism.split(/\s+/);
-                if (parts.length >= 2) {
-                    metadata.species_name = `${parts[0]} ${parts[1]}`;
-                } else {
-                    metadata.species_name = organism;
-                }
-            }
-
-            // Parse location
-            const locationMatch = record.match(/\/geo_loc_name="([^"]+)"/);
-            if (locationMatch) {
-                metadata.location = locationMatch[1];
-                metadata.location_simplified = simplifyLocation(locationMatch[1]);
-            }
-
-            // Parse voucher
-            const voucherMatch = record.match(/\/specimen_voucher="([^"]+)"/);
-            if (voucherMatch) {
-                metadata.collection_info = voucherMatch[1];
-            }
-
-            // Parse collection date
-            const dateMatch = record.match(/\/collection_date="([^"]+)"/);
-            if (dateMatch) {
-                metadata.collection_date = dateMatch[1];
-            }
-
-            // Parse isolation source
-            const isolationMatch = record.match(/\/isolation_source="([^"]+)"/);
-            if (isolationMatch) {
-                metadata.isolation_source = isolationMatch[1];
-            }
-
-            // Parse collector
-            const collectorMatch = record.match(/\/collected_by="([^"]+)"/);
-            if (collectorMatch) {
-                metadata.collected_by = collectorMatch[1];
-            }
-
-            // Check for type status
-            const typeStatuses = ['holotype', 'paratype', 'isotype', 'neotype', 'lectotype'];
-            for (const status of typeStatuses) {
-                if (record.toLowerCase().includes(status)) {
-                    metadata.type_status = status.charAt(0).toUpperCase() + status.slice(1);
-                    break;
-                }
-            }
-
-            // Parse references
-            const refMatch = record.match(/REFERENCE\s+1[^]*?AUTHORS\s+([^\n]+)/);
-            if (refMatch) {
-                const authors = refMatch[1].trim();
-                const firstAuthor = authors.split(',')[0].trim();
-                metadata.reference = firstAuthor + ' et al.';
-                
-                // Try to extract year
-                const yearMatch = record.match(/JOURNAL[^]*?(\d{4})/);
-                if (yearMatch) {
-                    metadata.bibliography = `${firstAuthor} et al. (${yearMatch[1]})`;
-                } else {
-                    metadata.bibliography = `${firstAuthor} et al. (unpublished)`;
-                }
-            }
-
-            return metadata;
-        }
-
-        function simplifyLocation(location) {
-            if (!location) return '';
-            
-            const parts = location.split(':');
-            if (parts.length < 2) return location;
-            
-            const country = parts[0].trim();
-            const region = parts[1].trim();
-            
-            if (['USA', 'Canada'].includes(country) && region) {
-                const stateProvince = region.split(',')[0].trim();
-                return `${country}: ${stateProvince}`;
-            }
-            
-            return country;
-        }
-
         function showProgress() {
             document.getElementById('progressSection').style.display = 'block';
             document.getElementById('resultsSection').style.display = 'none';
+            document.getElementById('logArea').innerHTML = '';
         }
 
-        function updateProgress(current, total) {
+        function updateProgress(current, total, message) {
             const percent = Math.round((current / total) * 100);
             document.getElementById('progressFill').style.width = percent + '%';
             document.getElementById('progressFill').textContent = percent + '%';
+            updateStatus(message);
         }
 
         function updateStatus(message) {
             document.getElementById('statusMessage').textContent = message;
         }
 
+        function log(message) {
+            const logArea = document.getElementById('logArea');
+            const timestamp = new Date().toLocaleTimeString();
+            logArea.innerHTML += `[${timestamp}] ${message}\n`;
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
         function showResults() {
             document.getElementById('progressSection').style.display = 'none';
             document.getElementById('resultsSection').style.display = 'block';
             
-            // Show statistics
-            const stats = calculateStats();
-            const statsGrid = document.getElementById('statsGrid');
-            statsGrid.innerHTML = `
-                <div class="stat-card">
-                    <div class="stat-value">${stats.total}</div>
-                    <div>Total Sequences</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${stats.withGenBank}</div>
-                    <div>GenBank IDs</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${stats.withSpecies}</div>
-                    <div>Identified Species</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${stats.typeSpecimens}</div>
-                    <div>Type Specimens</div>
-                </div>
-            `;
+            // Calculate statistics
+            let stats = {
+                total: currentResults.length,
+                withGenBank: 0,
+                fromLocal: 0,
+                typeSpecimens: 0
+            };
+            
+            currentResults.forEach(row => {
+                if (row.genbank_accession) stats.withGenBank++;
+                if (row.notes && row.notes.includes('local')) stats.fromLocal++;
+                if (row.type_status) stats.typeSpecimens++;
+            });
+            
+            // Update stat cards
+            document.getElementById('statTotal').textContent = stats.total;
+            document.getElementById('statGenBank').textContent = stats.withGenBank;
+            document.getElementById('statLocal').textContent = stats.fromLocal;
+            document.getElementById('statType').textContent = stats.typeSpecimens;
             
             // Show data preview
             const preview = document.getElementById('dataPreview');
@@ -980,12 +1182,13 @@ export default async function handler(req, res) {
                             <th>Type Status</th>
                             <th>Location</th>
                             <th>Collection</th>
+                            <th>Source</th>
                         </tr>
                     </thead>
                     <tbody>
             `;
             
-            currentResults.slice(0, 10).forEach(row => {
+            currentResults.slice(0, 15).forEach(row => {
                 html += `
                     <tr>
                         <td>${row.fasta_id}</td>
@@ -994,34 +1197,18 @@ export default async function handler(req, res) {
                         <td>${row.type_status || '-'}</td>
                         <td>${row.location_simplified || '-'}</td>
                         <td>${row.collection_info || '-'}</td>
+                        <td>${row.notes || '-'}</td>
                     </tr>
                 `;
             });
             
             html += '</tbody></table>';
             
-            if (currentResults.length > 10) {
-                html += `<p style="margin-top: 10px; color: #666;">Showing 10 of ${currentResults.length} entries</p>`;
+            if (currentResults.length > 15) {
+                html += `<p style="margin-top: 10px; color: #666;">Showing 15 of ${currentResults.length} entries</p>`;
             }
             
             preview.innerHTML = html;
-        }
-
-        function calculateStats() {
-            let stats = {
-                total: currentResults.length,
-                withGenBank: 0,
-                withSpecies: 0,
-                typeSpecimens: 0
-            };
-            
-            currentResults.forEach(row => {
-                if (row.genbank_accession) stats.withGenBank++;
-                if (row.species_name && row.species_name !== 'Unknown') stats.withSpecies++;
-                if (row.type_status) stats.typeSpecimens++;
-            });
-            
-            return stats;
         }
 
         function convertToCSV(data) {
@@ -1036,7 +1223,7 @@ export default async function handler(req, res) {
             const rows = data.map(row => [
                 row.fasta_id,
                 row.species_name,
-                row.species_name,  // Using same as species_name
+                row.species_name,
                 row.collection_info,
                 row.type_status,
                 row.genbank_accession,
@@ -1079,7 +1266,11 @@ export default async function handler(req, res) {
                 metadata: {
                     filename: currentFileName || 'sequences.fasta',
                     processing_date: new Date().toISOString(),
-                    total_entries: currentResults.length
+                    total_entries: currentResults.length,
+                    sources: {
+                        local_records: Object.keys(localRecords).length,
+                        ncbi_records: Object.keys(ncbiRecords).length
+                    }
                 },
                 entries: currentResults
             }, null, 2);
@@ -1097,21 +1288,32 @@ export default async function handler(req, res) {
 
         function clearAll() {
             fastaFiles = [];
+            genbankFiles = [];
+            localFiles = [];
+            quickFiles = [];
             currentResults = [];
             currentFileName = '';
-            window.manualSequences = null;
+            localRecords = {};
+            ncbiRecords = {};
             
-            document.getElementById('fileList').innerHTML = '';
-            document.getElementById('sequenceList').innerHTML = '';
-            document.getElementById('genbankData').value = '';
+            // Clear all file lists
+            ['fileList', 'genbankList', 'localList', 'quickList'].forEach(id => {
+                document.getElementById(id).innerHTML = '';
+            });
+            
+            // Reset buttons
             document.getElementById('processBtn').disabled = true;
+            document.getElementById('quickBtn').disabled = true;
+            
+            // Hide sections
             document.getElementById('progressSection').style.display = 'none';
             document.getElementById('resultsSection').style.display = 'none';
             
-            // Reset file inputs
-            document.getElementById('fileInput').value = '';
-            document.getElementById('fileInput2').value = '';
+            // Clear file inputs
+            ['fileInput', 'genbankInput', 'localInput', 'quickInput'].forEach(id => {
+                document.getElementById(id).value = '';
+            });
         }
-    </script>
-</body>
-</html>
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', initializeEventListeners);
