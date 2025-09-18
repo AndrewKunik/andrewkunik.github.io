@@ -1,0 +1,448 @@
+Awesome—yes. Here’s a single-file HTML app you can drop into a GitHub Pages site. It lets users:
+
+* paste forward/reverse primer lists (from Excel/Sheets),
+* or upload a Eurofins spreadsheet (.xlsx/.xls/.csv),
+* it auto-detects primer columns (Forward/Reverse/Fwd/Rev/Primer\*), with a manual picker if needed,
+* and calculates required µL per primer (count × volume per reaction, respecting a minimum volume).
+
+Built from your original script and README. &#x20;
+
+> Save this as `index.html` in your repo (or any page), commit, and you’re done.
+
+```html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Sanger Plate Primer Volume Counter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- SheetJS (XLSX) for reading Excel files -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b1020; --card:#131a2e; --ink:#e8ecff; --muted:#a9b2d6; --accent:#7aa2ff; --line:#253056;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font: 16px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      color: var(--ink); background: radial-gradient(1200px 600px at 20% -10%, #101735 0, #0b1020 60%);
+    }
+    header { padding: 28px 20px 10px; text-align: center; }
+    header h1 { margin: 0 0 6px; font-size: 24px; font-weight: 700; }
+    header p { margin: 0; color: var(--muted); }
+
+    .wrap { max-width: 1100px; margin: 18px auto 60px; padding: 0 16px; }
+
+    .grid {
+      display: grid; gap: 16px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 980px) {
+      .grid { grid-template-columns: 1.1fr 0.9fr; }
+    }
+
+    .card {
+      background: linear-gradient(180deg, #141c35, #101733);
+      border: 1px solid var(--line);
+      border-radius: 16px; padding: 16px;
+      box-shadow: 0 8px 30px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    .card h2 { margin-top: 0; font-size: 18px; letter-spacing: .2px; }
+    label { display: block; font-size: 13px; color: var(--muted); margin: 6px 0 6px; }
+    textarea {
+      width: 100%; min-height: 140px; resize: vertical; border-radius: 10px;
+      background: #0f1730; color: var(--ink); border: 1px solid var(--line); padding: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
+    }
+    input[type="file"] {
+      display: block; width: 100%; padding: 10px; border: 1px dashed var(--line); border-radius: 10px;
+      background: #0f1730; color: var(--muted);
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .controls { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+    .controls input[type="number"] {
+      width: 110px; padding: 8px; border-radius: 10px; border:1px solid var(--line); background:#0f1730; color: var(--ink);
+    }
+    .btn {
+      background: linear-gradient(180deg, #2b66ff, #1d47bf);
+      color: white; border: 0; padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 600;
+      box-shadow: 0 8px 20px rgba(122,162,255,.25);
+    }
+    .btn.secondary { background: #152149; }
+    .btn.ghost { background: transparent; border: 1px solid var(--line); }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+    .pill {
+      display:inline-block; padding:2px 8px; font-size:12px; border:1px solid var(--line); border-radius:999px; color: var(--muted);
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; }
+    th { color: var(--muted); font-weight: 600; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .totals { margin-top: 8px; color: var(--muted); font-size: 14px; }
+    details { border:1px solid var(--line); border-radius:10px; padding: 8px 10px; background:#0f1730; }
+    summary { cursor: pointer; color: var(--muted); }
+
+    .selects { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+    select { width: 100%; padding: 8px; border-radius: 10px; border:1px solid var(--line); background:#0f1730; color: var(--ink); }
+
+    footer { text-align:center; color: var(--muted); font-size: 12px; margin: 28px 0; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Sanger Plate Primer Volume Counter</h1>
+  <p>Paste primer lists or upload a Eurofins spreadsheet—then calculate required µL per primer.</p>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+    <section class="card">
+      <h2>1) Paste primer lists (optional)</h2>
+      <div class="row">
+        <div>
+          <label>Forward primers (one per line; paste from Excel)</label>
+          <textarea id="forwardPaste" placeholder="e.g.&#10;2F1_0&#10;2F1_0&#10;2F0_1"></textarea>
+        </div>
+        <div>
+          <label>Reverse primers (one per line; paste from Excel)</label>
+          <textarea id="reversePaste" placeholder="e.g.&#10;2R2_0&#10;2R2_0&#10;1R3_0"></textarea>
+        </div>
+      </div>
+      <p class="hint">You can use this, or upload a Eurofins spreadsheet below—either or both are fine.</p>
+    </section>
+
+    <section class="card">
+      <h2>2) Or upload Eurofins spreadsheet</h2>
+      <input id="fileInput" type="file" accept=".xlsx,.xls,.csv" />
+      <div class="hint">We’ll try to auto-detect primer columns like <span class="pill">Forward</span>, <span class="pill">Reverse</span>, <span class="pill">Fwd</span>, <span class="pill">Rev</span>, <span class="pill">Primer*</span>. If detection fails, choose them below.</div>
+
+      <details id="manualPicker" style="display:none;">
+        <summary>Manual column selection (shown if auto-detect is unsure)</summary>
+        <div class="selects">
+          <div>
+            <label>Forward primer column(s)</label>
+            <select id="forwardCols" multiple size="6"></select>
+          </div>
+          <div>
+            <label>Reverse primer column(s)</label>
+            <select id="reverseCols" multiple size="6"></select>
+          </div>
+        </div>
+        <div class="hint">Hold Ctrl/Cmd to select multiple. We’ll count non-empty cells in these columns across all rows.</div>
+      </details>
+      <div class="hint" id="sheetInfo" style="margin-top:8px;"></div>
+    </section>
+
+    <section class="card">
+      <h2>3) Settings</h2>
+      <div class="controls">
+        <label>µL per reaction<br><input id="ulPer" type="number" step="0.1" value="5"></label>
+        <label>Minimum µL per primer<br><input id="minUl" type="number" step="0.1" value="10"></label>
+        <button class="btn" id="calcBtn">Count &amp; Calculate</button>
+        <button class="btn secondary" id="downloadCsvBtn" disabled>Download CSV</button>
+        <button class="btn ghost" id="clearBtn">Clear</button>
+      </div>
+      <p class="hint">Formula: for each primer, <em>max(count × µL per reaction, minimum µL)</em>.</p>
+    </section>
+
+    <section class="card">
+      <h2>Results</h2>
+      <div id="results"></div>
+      <div class="totals" id="totals"></div>
+    </section>
+  </div>
+
+  <footer>Made for quick Sanger shipments. No data leaves your browser.</footer>
+</div>
+
+<script>
+/* ------- Helpers ------- */
+function linesToList(text) {
+  if (!text) return [];
+  // Split on newlines or tabs (handles pasted columns/rows)
+  return text.split(/[\n\r\t]+/)
+    .map(s => (s || '').trim())
+    .filter(Boolean);
+}
+
+function countItems(list) {
+  const map = new Map();
+  for (const item of list) {
+    map.set(item, (map.get(item) || 0) + 1);
+  }
+  return map;
+}
+
+function toCSV(rows) {
+  const esc = (v) => {
+    const s = String(v ?? '');
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  return rows.map(r => r.map(esc).join(",")).join("\n");
+}
+
+function renderTable(title, map, ulPer, minUl) {
+  if (map.size === 0) return `<h3>${title}</h3><p class="hint">No primers found.</p>`;
+  let html = `<h3>${title}</h3><table><thead><tr>
+      <th>Primer</th><th class="num">Count</th><th class="num">Calc (count × ${ulPer} µL)</th><th class="num">Final µL (min ${minUl})</th>
+    </tr></thead><tbody>`;
+  let subtotal = 0;
+  [...map.entries()].sort((a,b) => a[0].localeCompare(b[0])).forEach(([primer, count]) => {
+    const calc = count * ulPer;
+    const final = Math.max(calc, minUl);
+    subtotal += final;
+    html += `<tr><td>${primer}</td><td class="num">${count}</td><td class="num">${calc.toFixed(2)}</td><td class="num">${final.toFixed(2)}</td></tr>`;
+  });
+  html += `</tbody></table><div class="totals"><strong>${title} total:</strong> ${subtotal.toFixed(2)} µL</div>`;
+  return { html, subtotal };
+}
+
+/* ------- Excel parsing ------- */
+let excelState = {
+  headers: [],
+  rows: [],
+  autoForwardCols: [],
+  autoReverseCols: []
+};
+
+function detectPrimerColumns(headers) {
+  const fwd = [];
+  const rev = [];
+  const maybe = [];
+
+  headers.forEach((h, idx) => {
+    const key = String(h || '').trim();
+    const low = key.toLowerCase();
+
+    const isPrimer = /(primer|primers)/i.test(key);
+    const isForward = /(forward|fwd|fw)/i.test(key);
+    const isReverse = /(reverse|rev|rv)/i.test(key);
+
+    if (isForward) fwd.push(idx);
+    if (isReverse) rev.push(idx);
+
+    // If just "Primer" and we don't know which, mark as maybe
+    if (isPrimer && !isForward && !isReverse) maybe.push(idx);
+  });
+
+  // Heuristic: If we have equal number of "Primer" generics and plate layout (e.g., two adjacent),
+  // we won't try to split; present manual picker.
+  return { fwd, rev, maybe };
+}
+
+function populateManualPicker(headers) {
+  const forwardSel = document.getElementById('forwardCols');
+  const reverseSel = document.getElementById('reverseCols');
+  forwardSel.innerHTML = '';
+  reverseSel.innerHTML = '';
+  headers.forEach((h, idx) => {
+    const opt1 = document.createElement('option');
+    opt1.value = idx; opt1.textContent = `${idx+1}: ${h || '(blank header)'}`;
+    const opt2 = opt1.cloneNode(true);
+    forwardSel.appendChild(opt1);
+    reverseSel.appendChild(opt2);
+  });
+  document.getElementById('manualPicker').style.display = '';
+}
+
+function getSelectedManualCols() {
+  const forwardSel = document.getElementById('forwardCols');
+  const reverseSel = document.getElementById('reverseCols');
+  const getVals = (sel) => Array.from(sel.selectedOptions).map(o => Number(o.value));
+  return { fwd: getVals(forwardSel), rev: getVals(reverseSel) };
+}
+
+function readCSV(text) {
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  const rows = lines.map(line => {
+    // naive CSV split; handle simple quoted fields
+    const out = [];
+    let cur = '', inQuotes = false;
+    for (let i=0; i<line.length; i++) {
+      const ch = line[i];
+      if (ch === '"' ) {
+        if (inQuotes && line[i+1] === '"') { cur += '"'; i++; }
+        else inQuotes = !inQuotes;
+      } else if (ch === ',' && !inQuotes) {
+        out.push(cur); cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    out.push(cur);
+    return out;
+  });
+  return rows;
+}
+
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const sheetInfo = document.getElementById('sheetInfo');
+  sheetInfo.textContent = 'Reading file…';
+
+  const ext = file.name.split('.').pop().toLowerCase();
+  let headers = [];
+  let rows = [];
+
+  try {
+    if (ext === 'csv') {
+      const text = await file.text();
+      const csvRows = readCSV(text);
+      headers = csvRows[0] || [];
+      rows = csvRows.slice(1);
+    } else {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data, { type: 'array' });
+      // Use first sheet by default
+      const sheetName = wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const json = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+      headers = (json[0] || []).map(h => String(h).trim());
+      rows = json.slice(1);
+      sheetInfo.textContent = `Loaded “${file.name}” — sheet: ${sheetName}, ${rows.length} rows.`;
+    }
+
+    excelState.headers = headers;
+    excelState.rows = rows;
+
+    // Try auto-detect
+    const { fwd, rev, maybe } = detectPrimerColumns(headers);
+    excelState.autoForwardCols = fwd;
+    excelState.autoReverseCols = rev;
+
+    const manualNeeded = (fwd.length === 0 && rev.length === 0) || maybe.length > 0;
+    if (manualNeeded) {
+      populateManualPicker(headers);
+    } else {
+      document.getElementById('manualPicker').style.display = 'none';
+    }
+
+  } catch (err) {
+    console.error(err);
+    sheetInfo.textContent = 'Could not read file (unsupported format or corrupted).';
+  }
+});
+
+/* ------- Counting from Excel rows ------- */
+function collectFromExcel(selectedFwd = null, selectedRev = null) {
+  const headers = excelState.headers || [];
+  const rows = excelState.rows || [];
+  const fwdCols = (selectedFwd ?? excelState.autoForwardCols) || [];
+  const revCols = (selectedRev ?? excelState.autoReverseCols) || [];
+
+  const fwdList = [];
+  const revList = [];
+
+  const pushVal = (arr, v) => {
+    const s = String(v ?? '').trim();
+    if (s) arr.push(s);
+  };
+
+  for (const r of rows) {
+    // r is an array of cell values for the row
+    for (const c of fwdCols) pushVal(fwdList, r[c]);
+    for (const c of revCols) pushVal(revList, r[c]);
+  }
+  return { fwdList, revList, fwdCols, revCols, headers };
+}
+
+/* ------- Main Calculate ------- */
+document.getElementById('calcBtn').addEventListener('click', () => {
+  const ulPer = parseFloat(document.getElementById('ulPer').value) || 5;
+  const minUl = parseFloat(document.getElementById('minUl').value) || 10;
+
+  // From pasted text
+  const pastedF = linesToList(document.getElementById('forwardPaste').value);
+  const pastedR = linesToList(document.getElementById('reversePaste').value);
+
+  // From Excel (if any)
+  let excelF = [], excelR = [];
+  let usedFwdCols = [], usedRevCols = [];
+
+  if ((excelState.rows || []).length > 0) {
+    // If manual picker is visible and has selections, use them
+    const manualVisible = document.getElementById('manualPicker').style.display !== 'none';
+    let chosenF = null, chosenR = null;
+    if (manualVisible) {
+      const sel = getSelectedManualCols();
+      if (sel.fwd.length || sel.rev.length) {
+        chosenF = sel.fwd;
+        chosenR = sel.rev;
+      }
+    }
+    const { fwdList, revList, fwdCols, revCols } = collectFromExcel(chosenF, chosenR);
+    excelF = fwdList; excelR = revList;
+    usedFwdCols = fwdCols; usedRevCols = revCols;
+  }
+
+  const fwdAll = [...pastedF, ...excelF];
+  const revAll = [...pastedR, ...excelR];
+
+  const fwdCounts = countItems(fwdAll);
+  const revCounts = countItems(revAll);
+
+  // Render
+  const results = document.getElementById('results');
+  const totals = document.getElementById('totals');
+  results.innerHTML = '';
+  totals.textContent = '';
+
+  const fwdBlock = renderTable('Forward Primers', fwdCounts, ulPer, minUl);
+  const revBlock = renderTable('Reverse Primers', revCounts, ulPer, minUl);
+
+  results.innerHTML = fwdBlock.html + '<div style="height:14px"></div>' + revBlock.html;
+
+  const grand = (fwdBlock.subtotal || 0) + (revBlock.subtotal || 0);
+  totals.innerHTML = `<strong>Grand total:</strong> ${grand.toFixed(2)} µL`;
+
+  // Enable CSV download
+  const csvRows = [["Type","Primer","Count","Calc (µL)","Final µL"]];
+  const pushCsvFromMap = (type, map) => {
+    [...map.entries()].sort((a,b)=>a[0].localeCompare(b[0])).forEach(([primer,count])=>{
+      const calc = count * ulPer;
+      const final = Math.max(calc, minUl);
+      csvRows.push([type, primer, count, calc.toFixed(2), final.toFixed(2)]);
+    });
+  };
+  pushCsvFromMap("Forward", fwdCounts);
+  pushCsvFromMap("Reverse", revCounts);
+
+  const csv = toCSV(csvRows);
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const dlBtn = document.getElementById('downloadCsvBtn');
+  dlBtn.disabled = false;
+  dlBtn.onclick = () => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'primer_volumes.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 1500);
+  };
+});
+
+/* ------- Clear ------- */
+document.getElementById('clearBtn').addEventListener('click', () => {
+  document.getElementById('forwardPaste').value = '';
+  document.getElementById('reversePaste').value = '';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('totals').textContent = '';
+  document.getElementById('downloadCsvBtn').disabled = true;
+  document.getElementById('sheetInfo').textContent = '';
+  document.getElementById('manualPicker').style.display = 'none';
+  excelState = { headers: [], rows: [], autoForwardCols: [], autoReverseCols: [] };
+});
+</script>
+</body>
+</html>
+```
+
+Want me to tailor the auto-detection to the exact Eurofins column names you see most often, or add a per-well view?
