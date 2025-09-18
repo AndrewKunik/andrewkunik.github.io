@@ -107,6 +107,7 @@
             background: #f8f9ff;
             cursor: pointer;
             transition: all 0.3s;
+            position: relative; /* <-- add this line */
         }
 
         .file-upload-area:hover {
@@ -139,7 +140,10 @@
         }
 
         .file-upload-area input[type="file"] {
-            display: none;
+            position: absolute;
+            inset: 0;   /* top/right/bottom/left: 0 */
+            opacity: 0;
+            cursor: pointer;
         }
 
         .upload-icon {
@@ -425,9 +429,9 @@
 
         <div class="main-card">
             <div class="tabs">
-                <button class="tab active" onclick="switchTab('enhanced')">Enhanced Processing</button>
-                <button class="tab" onclick="switchTab('quick')">Quick Parse</button>
-                <button class="tab" onclick="switchTab('instructions')">Instructions</button>
+                <button class="tab active" onclick="switchTab(event, 'enhanced')">Enhanced Processing</button>
+                <button class="tab" onclick="switchTab(event, 'quick')">Quick Parse</button>
+                <button class="tab" onclick="switchTab(event, 'instructions')">Instructions</button>
             </div>
 
             <!-- Enhanced Processing Tab -->
@@ -637,6 +641,13 @@ Notes                 - Additional information
         let ncbiRecords = {};
 
         // Initialize event listeners
+        ['dragenter','dragover','dragleave','drop'].forEach(type => {
+            window.addEventListener(type, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            }, false);
+        });
+        
         function initializeEventListeners() {
             // Enhanced mode uploads
             setupFileUpload('uploadArea', 'fileInput', (files) => {
@@ -673,6 +684,7 @@ Notes                 - Additional information
             // Drag and drop
             area.addEventListener('dragover', (e) => {
                 e.preventDefault();
+                if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
                 area.classList.add('dragging');
             });
 
@@ -734,7 +746,7 @@ Notes                 - Additional information
             document.getElementById('processBtn').disabled = fastaFiles.length === 0;
         }
 
-        function switchTab(tabName) {
+        function switchTab(evt, tabName) {
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.classList.remove('active');
             });
@@ -742,7 +754,9 @@ Notes                 - Additional information
                 content.classList.remove('active');
             });
             
-            event.target.classList.add('active');
+            if (evt && evt.currentTarget) {
+                evt.currentTarget.classList.add('active');
+            }
             document.getElementById(tabName).classList.add('active');
         }
 
