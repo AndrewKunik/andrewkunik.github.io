@@ -1,15 +1,3 @@
-Awesome—yes. Here’s a single-file HTML app you can drop into a GitHub Pages site. It lets users:
-
-* paste forward/reverse primer lists (from Excel/Sheets),
-* or upload a Eurofins spreadsheet (.xlsx/.xls/.csv),
-* it auto-detects primer columns (Forward/Reverse/Fwd/Rev/Primer\*), with a manual picker if needed,
-* and calculates required µL per primer (count × volume per reaction, respecting a minimum volume).
-
-Built from your original script and README. &#x20;
-
-> Save this as `index.html` in your repo (or any page), commit, and you’re done.
-
-```html
 <!doctype html>
 <html lang="en">
 <head>
@@ -443,6 +431,3 @@ document.getElementById('clearBtn').addEventListener('click', () => {
 </script>
 </body>
 </html>
-```
-
-Want me to tailor the auto-detection to the exact Eurofins column names you see most often, or add a per-well view?
