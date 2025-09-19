@@ -212,7 +212,7 @@
             padding: 15px;
             margin: 10px 0;
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
         }
 
@@ -789,6 +789,47 @@
                             const state = region.split(',')[0].trim();
                             entry['Location simplified'] = `${country}: ${state}`;
                         } else {
+                            entry['Location simplified'] = country;
+                        }
+                    } else {
+                        entry['Location simplified'] = entry['Location'];
+                    }
+                }
+
+                // Extract type status
+                if (record.type_material) {
+                    const typeStatuses = ['holotype', 'paratype', 'isotype', 'neotype', 'lectotype', 'syntype', 'epitype'];
+                    for (let status of typeStatuses) {
+                        if (record.type_material.toLowerCase().includes(status)) {
+                            entry['Type status'] = status.charAt(0).toUpperCase() + status.slice(1);
+                            break;
+                        }
+                    }
+                }
+
+                // Extract iNat/MO numbers
+                const allText = [record.specimen_voucher, record.isolation_source, entry['Notes']].join(' ');
+                const inatMatch = allText.match(/(inat\s*#?|inaturalist\s*#?)\s*(\d+)/i);
+                const moMatch = allText.match(/(mo\s*#?|mushroom\s*observer\s*#?)\s*(\d+)/i);
+                
+                if (inatMatch) {
+                    entry['iNat/MO Number'] = `iNaturalist #${inatMatch[2]}`;
+                } else if (moMatch) {
+                    entry['iNat/MO Number'] = `Mushroom Observer #${moMatch[2]}`;
+                }
+
+                // Create bibliography
+                if (record.references && record.references.length > 0) {
+                    const ref = record.references[0];
+                    const bibParts = [];
+                    
+                    if (ref.authors) {
+                        const authors = ref.authors.split(', ');
+                        if (authors.length === 1) {
+                            bibParts.push(authors[0]);
+                        } else if (authors.length === 2) {
+                            bibParts.push(`${authors[0]} & ${authors[1]}`);
+                        } else {
                             bibParts.push(`${authors[0]} et al.`);
                         }
                     }
@@ -998,45 +1039,4 @@
         }
     </script>
 </body>
-</html>
-                            entry['Location simplified'] = country;
-                        }
-                    } else {
-                        entry['Location simplified'] = entry['Location'];
-                    }
-                }
-
-                // Extract type status
-                if (record.type_material) {
-                    const typeStatuses = ['holotype', 'paratype', 'isotype', 'neotype', 'lectotype', 'syntype', 'epitype'];
-                    for (let status of typeStatuses) {
-                        if (record.type_material.toLowerCase().includes(status)) {
-                            entry['Type status'] = status.charAt(0).toUpperCase() + status.slice(1);
-                            break;
-                        }
-                    }
-                }
-
-                // Extract iNat/MO numbers
-                const allText = [record.specimen_voucher, record.isolation_source, entry['Notes']].join(' ');
-                const inatMatch = allText.match(/(inat\s*#?|inaturalist\s*#?)\s*(\d+)/i);
-                const moMatch = allText.match(/(mo\s*#?|mushroom\s*observer\s*#?)\s*(\d+)/i);
-                
-                if (inatMatch) {
-                    entry['iNat/MO Number'] = `iNaturalist #${inatMatch[2]}`;
-                } else if (moMatch) {
-                    entry['iNat/MO Number'] = `Mushroom Observer #${moMatch[2]}`;
-                }
-
-                // Create bibliography
-                if (record.references && record.references.length > 0) {
-                    const ref = record.references[0];
-                    const bibParts = [];
-                    
-                    if (ref.authors) {
-                        const authors = ref.authors.split(', ');
-                        if (authors.length === 1) {
-                            bibParts.push(authors[0]);
-                        } else if (authors.length === 2) {
-                            bibParts.push(`${authors[0]} & ${authors[1]}`);
-                        } else {
+</html>authors) {
