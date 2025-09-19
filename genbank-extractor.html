@@ -289,6 +289,18 @@
             width: 0%;
             transition: width 0.3s ease;
         }
+
+        .debug-section {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
@@ -358,6 +370,7 @@
                 <div class="progress-fill" id="progressFill"></div>
             </div>
             <div id="processStatus"></div>
+            <div id="debugInfo" class="debug-section hidden"></div>
             <div id="downloadSection" class="hidden">
                 <h3>Download Results:</h3>
                 <div id="downloadLinks"></div>
@@ -522,11 +535,20 @@
             }
         }
 
+        function debugLog(message) {
+            const debugDiv = document.getElementById('debugInfo');
+            debugDiv.classList.remove('hidden');
+            debugDiv.innerHTML += message + '\n';
+        }
+
         function processFiles() {
             const button = document.getElementById('processButton');
             const status = document.getElementById('processStatus');
             const progressBar = document.getElementById('progressBar');
             const progressFill = document.getElementById('progressFill');
+
+            // Clear debug info
+            document.getElementById('debugInfo').innerHTML = '';
 
             button.disabled = true;
             button.innerHTML = '<span class="loading"></span>Processing...';
@@ -550,13 +572,20 @@
                 clearInterval(progressInterval);
                 progressFill.style.width = '100%';
 
+                debugLog(`GenBank records parsed: ${Object.keys(genbankRecords).length}`);
+                
                 // Combine all local records
                 const localRecords = {};
                 localRecordsArrays.forEach(records => {
                     Object.assign(localRecords, records);
                 });
 
+                debugLog(`Local records parsed: ${Object.keys(localRecords).length}`);
+
                 const allRecords = { ...genbankRecords, ...localRecords };
+                debugLog(`Total records available: ${Object.keys(allRecords).length}`);
+                debugLog(`FASTA sequences to process: ${fastaSequences.length}`);
+
                 const metadata = extractMetadata(fastaSequences, allRecords);
                 
                 generateSpreadsheet(metadata);
@@ -574,6 +603,8 @@
                 button.textContent = 'Generate Metadata Spreadsheet';
                 status.innerHTML = `<div class="status error">Error: ${error.message}</div>`;
                 progressBar.classList.add('hidden');
+                debugLog(`Error: ${error.message}`);
+                console.error(error);
             });
         }
 
@@ -596,14 +627,17 @@
 
         function parseGenbankContent(content) {
             const records = {};
-            const entries = content.split('//\n');
+            const entries = content.split('//\n').filter(entry => entry.trim().length > 0);
 
-            for (let entry of entries) {
-                if (entry.trim().length === 0) continue;
+            debugLog(`Found ${entries.length} GenBank entries to parse`);
 
+            for (let i = 0; i < entries.length; i++) {
+                const entry = entries[i];
                 try {
                     const record = parseGenbankEntry(entry);
                     if (record && record.accession) {
+                        debugLog(`Parsed record: ${record.accession} - ${record.organism}`);
+                        
                         // Store by accession
                         records[record.accession] = record;
                         records[record.accession.split('.')[0]] = record;
@@ -617,6 +651,7 @@
                         }
                     }
                 } catch (error) {
+                    debugLog(`Error parsing GenBank entry ${i}: ${error.message}`);
                     console.warn('Error parsing GenBank entry:', error);
                 }
             }
@@ -641,8 +676,12 @@
 
             let currentSection = '';
             let currentFeature = null;
+            let currentReference = null;
+            let continuationLine = '';
 
-            for (let line of lines) {
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i];
+                
                 // Handle ACCESSION line
                 if (line.startsWith('ACCESSION')) {
                     record.accession = line.substring(10).trim().split(' ')[0];
@@ -661,63 +700,97 @@
                 // Handle feature lines
                 else if (currentSection === 'features' && line.match(/^\s{5}(\w+)\s+/)) {
                     const match = line.match(/^\s{5}(\w+)\s+(.+)/);
-                    currentFeature = {
-                        type: match[1],
-                        location: match[2],
-                        qualifiers: {}
-                    };
-                    record.features.push(currentFeature);
+                    if (match) {
+                        currentFeature = {
+                            type: match[1],
+                            location: match[2],
+                            qualifiers: {}
+                        };
+                        record.features.push(currentFeature);
+                    }
                 }
                 
                 // Handle qualifier lines
                 else if (currentSection === 'features' && currentFeature && line.match(/^\s{21}\/(\w+)=/)) {
                     const match = line.match(/^\s{21}\/(\w+)=(.+)/);
-                    const qualifier = match[1];
-                    let value = match[2];
-                    
-                    // Remove quotes
-                    if (value.startsWith('"') && value.endsWith('"')) {
-                        value = value.slice(1, -1);
+                    if (match) {
+                        const qualifier = match[1];
+                        let value = match[2];
+                        
+                        // Handle multi-line values
+                        if (value.startsWith('"') && !value.endsWith('"')) {
+                            // This is a multi-line qualifier
+                            let j = i + 1;
+                            while (j < lines.length && lines[j].match(/^\s{21}/) && !lines[j].includes('/')) {
+                                value += ' ' + lines[j].substring(21).trim();
+                                i = j; // Skip these lines in main loop
+                                j++;
+                            }
+                        }
+                        
+                        // Remove quotes
+                        if (value.startsWith('"') && value.endsWith('"')) {
+                            value = value.slice(1, -1);
+                        }
+                        
+                        currentFeature.qualifiers[qualifier] = value;
+                        
+                        // Store important qualifiers at record level
+                        if (qualifier === 'specimen_voucher') record.specimen_voucher = value;
+                        else if (qualifier === 'geo_loc_name') record.geo_loc_name = value;
+                        else if (qualifier === 'collection_date') record.collection_date = value;
+                        else if (qualifier === 'collected_by') record.collected_by = value;
+                        else if (qualifier === 'isolation_source') record.isolation_source = value;
+                        else if (qualifier === 'type_material') record.type_material = value;
                     }
-                    
-                    currentFeature.qualifiers[qualifier] = value;
-                    
-                    // Store important qualifiers at record level
-                    if (qualifier === 'specimen_voucher') record.specimen_voucher = value;
-                    else if (qualifier === 'geo_loc_name') record.geo_loc_name = value;
-                    else if (qualifier === 'collection_date') record.collection_date = value;
-                    else if (qualifier === 'collected_by') record.collected_by = value;
-                    else if (qualifier === 'isolation_source') record.isolation_source = value;
-                    else if (qualifier === 'type_material') record.type_material = value;
                 }
                 
                 // Handle REFERENCE section
                 else if (line.startsWith('REFERENCE')) {
                     currentSection = 'reference';
-                    record.references.push({
+                    currentReference = {
                         authors: '',
                         title: '',
                         journal: '',
                         year: ''
-                    });
+                    };
+                    record.references.push(currentReference);
                 }
-                else if (currentSection === 'reference' && line.startsWith('  AUTHORS')) {
-                    const ref = record.references[record.references.length - 1];
-                    ref.authors = line.substring(10).trim();
-                }
-                else if (currentSection === 'reference' && line.startsWith('  TITLE')) {
-                    const ref = record.references[record.references.length - 1];
-                    ref.title = line.substring(8).trim();
-                }
-                else if (currentSection === 'reference' && line.startsWith('  JOURNAL')) {
-                    const ref = record.references[record.references.length - 1];
-                    ref.journal = line.substring(10).trim();
-                    
-                    // Extract year from journal
-                    const yearMatch = ref.journal.match(/\((\d{4})\)/);
-                    if (yearMatch) {
-                        ref.year = yearMatch[1];
+                else if (currentSection === 'reference' && currentReference) {
+                    if (line.startsWith('  AUTHORS')) {
+                        currentReference.authors = line.substring(10).trim();
                     }
+                    else if (line.startsWith('  TITLE')) {
+                        currentReference.title = line.substring(8).trim();
+                    }
+                    else if (line.startsWith('  JOURNAL')) {
+                        currentReference.journal = line.substring(10).trim();
+                        
+                        // Extract year from journal
+                        const yearMatch = currentReference.journal.match(/\((\d{4})\)/);
+                        if (yearMatch) {
+                            currentReference.year = yearMatch[1];
+                        }
+                    }
+                    // Handle continuation lines for references
+                    else if (line.match(/^\s{12}/) && !line.startsWith('REFERENCE')) {
+                        const continuation = line.substring(12).trim();
+                        if (currentReference.title && !currentReference.journal) {
+                            currentReference.title += ' ' + continuation;
+                        } else if (currentReference.journal) {
+                            currentReference.journal += ' ' + continuation;
+                            // Re-extract year if needed
+                            const yearMatch = currentReference.journal.match(/\((\d{4})\)/);
+                            if (yearMatch) {
+                                currentReference.year = yearMatch[1];
+                            }
+                        }
+                    }
+                }
+                
+                // Reset section if we hit a new major section
+                else if (line.startsWith('ORIGIN') || line.startsWith('CONTIG') || line.startsWith('//')) {
+                    currentSection = '';
                 }
             }
 
@@ -727,9 +800,12 @@
         function extractMetadata(sequences, records) {
             const metadata = [];
 
+            debugLog(`Starting metadata extraction for ${sequences.length} sequences`);
+
             for (let seqId of sequences) {
                 const entry = createMetadataEntry(seqId, records);
                 metadata.push(entry);
+                debugLog(`Processed ${seqId}: ${entry['Species Name']} - ${entry['GenBank Accession']}`);
             }
 
             return metadata;
@@ -758,6 +834,8 @@
             };
 
             if (record) {
+                debugLog(`Found GenBank record for ${seqId}: ${record.accession}`);
+                
                 // Extract species name
                 if (record.organism) {
                     const parts = record.organism.split(' ');
@@ -807,10 +885,17 @@
                     }
                 }
 
-                // Extract iNat/MO numbers
-                const allText = [record.specimen_voucher, record.isolation_source, entry['Notes']].join(' ');
-                const inatMatch = allText.match(/(inat\s*#?|inaturalist\s*#?)\s*(\d+)/i);
-                const moMatch = allText.match(/(mo\s*#?|mushroom\s*observer\s*#?)\s*(\d+)/i);
+                // Extract iNat/MO numbers from various fields
+                const searchText = [
+                    record.specimen_voucher || '',
+                    record.isolation_source || '',
+                    entry['Notes'] || '',
+                    // Also check if the specimen voucher itself contains iNat info
+                    seqId
+                ].join(' ');
+                
+                const inatMatch = searchText.match(/(inat|inaturalist)[:\s#]*(\d+)/i);
+                const moMatch = searchText.match(/(mo|mushroom\s*observer)[:\s#]*(\d+)/i);
                 
                 if (inatMatch) {
                     entry['iNat/MO Number'] = `iNaturalist #${inatMatch[2]}`;
@@ -845,7 +930,7 @@
                     if (ref.journal) {
                         if (ref.journal.toLowerCase().includes('unpublished')) {
                             bibParts.push('Unpublished.');
-                        } else if (ref.journal.toLowerCase().includes('submitted')) {
+                        } else if (ref.journal.toLowerCase().includes('submitted') || ref.journal.toLowerCase().includes('direct submission')) {
                             bibParts.push('Direct Submission.');
                         } else {
                             bibParts.push(`${ref.journal}.`);
@@ -866,8 +951,10 @@
                     entry['Bibliography'] = 'Unpublished';
                 }
             } else {
+                debugLog(`No GenBank record found for ${seqId}, using local parsing`);
                 // No GenBank record found - try to parse local sequence
-                entry = parseLocalSequence(seqId);
+                const localEntry = parseLocalSequence(seqId);
+                Object.assign(entry, localEntry);
             }
 
             return entry;
@@ -875,23 +962,34 @@
 
         function findRecord(seqId, records) {
             // Try exact match
-            if (records[seqId]) return records[seqId];
+            if (records[seqId]) {
+                debugLog(`Found exact match for ${seqId}`);
+                return records[seqId];
+            }
             
             // Try without version
             const baseAccession = seqId.split('.')[0];
-            if (records[baseAccession]) return records[baseAccession];
+            if (records[baseAccession]) {
+                debugLog(`Found base accession match for ${seqId} -> ${baseAccession}`);
+                return records[baseAccession];
+            }
             
             // Try with cleaned voucher variations
             const cleanId = seqId.replace(/[\s\-_]/g, '');
-            if (records[cleanId]) return records[cleanId];
+            if (records[cleanId]) {
+                debugLog(`Found cleaned match for ${seqId} -> ${cleanId}`);
+                return records[cleanId];
+            }
             
             // Try partial matching for voucher numbers
             for (let key in records) {
                 if (seqId.includes(key) || key.includes(seqId)) {
+                    debugLog(`Found partial match for ${seqId} -> ${key}`);
                     return records[key];
                 }
             }
             
+            debugLog(`No record found for ${seqId}`);
             return null;
         }
 
