@@ -310,13 +310,13 @@
         </div>
 
         <!-- Step 2: Extract GenBank accessions -->
-        <div class="workflow-section" id="step2" style="display: none;">
-            <h2><span class="step-number">2</span>GenBank Accessions Found</h2>
-            <p>Copy this list and paste it into the GenBank search box:</p>
+        <div class="workflow-section" id="step2">
+            <h2><span class="step-number">2</span>GenBank Accessions (Optional)</h2>
+            <p>If your FASTA contains GenBank accessions, they will appear here for download from NCBI:</p>
             <div class="instructions">
-                <h3>Instructions:</h3>
+                <h3>Instructions for GenBank Download:</h3>
                 <ol>
-                    <li>Copy the accession numbers below</li>
+                    <li>Copy the accession numbers below (if any)</li>
                     <li>Go to <a href="https://www.ncbi.nlm.nih.gov/nuccore" target="_blank">NCBI GenBank</a></li>
                     <li>Paste the numbers into the search box</li>
                     <li>Click "Search"</li>
@@ -324,12 +324,12 @@
                     <li>Save the .gb file and upload it in Step 3 below</li>
                 </ol>
             </div>
-            <textarea class="accession-list" id="accessionList" readonly></textarea>
+            <textarea class="accession-list" id="accessionList" readonly placeholder="Upload a FASTA file above to see GenBank accessions here..."></textarea>
             <button class="copy-button" onclick="copyAccessions()">Copy Accession Numbers</button>
         </div>
 
         <!-- Step 3: Upload GenBank file and local files -->
-        <div class="workflow-section" id="step3" style="display: none;">
+        <div class="workflow-section" id="step3">
             <h2><span class="step-number">3</span>Upload GenBank Data</h2>
             
             <h3>GenBank File (.gb format from NCBI)</h3>
@@ -351,7 +351,7 @@
         </div>
 
         <!-- Step 4: Process and download -->
-        <div class="workflow-section" id="step4" style="display: none;">
+        <div class="workflow-section" id="step4">
             <h2><span class="step-number">4</span>Generate Metadata Spreadsheet</h2>
             <button class="process-button" id="processButton" onclick="processFiles()">Generate Metadata Spreadsheet</button>
             <div class="progress-bar hidden" id="progressBar">
@@ -477,23 +477,10 @@
                 </div>
             `;
 
-            // Show step 2
-            document.getElementById('step2').style.display = 'block';
-            
             if (genbankAccessions.length > 0) {
                 document.getElementById('accessionList').textContent = genbankAccessions.join('\n');
-                document.getElementById('step3').style.display = 'block';
             } else {
-                // No GenBank accessions found, skip to local processing
-                document.getElementById('step2').innerHTML = `
-                    <h2><span class="step-number">2</span>No GenBank Accessions Found</h2>
-                    <div class="status info">
-                        No GenBank accession numbers were found in your FASTA file. 
-                        You can still process local sequences by uploading local GenBank files in Step 3.
-                    </div>
-                `;
-                document.getElementById('step3').style.display = 'block';
-                checkReadyToProcess();
+                document.getElementById('accessionList').placeholder = "No GenBank accessions found in FASTA file. You can still process using local files.";
             }
         }
 
