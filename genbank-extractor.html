@@ -4,302 +4,238 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GenBank Metadata Extractor</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-
+        
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
         }
-
+        
         .container {
-            max-width: 1200px;
+            max-width: 900px;
             margin: 0 auto;
             background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
             backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
         }
-
+        
         .header {
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            color: white;
+            padding: 30px;
             text-align: center;
-            margin-bottom: 40px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #f0f0f0;
         }
-
+        
         .header h1 {
-            color: #333;
             font-size: 2.5em;
             margin-bottom: 10px;
             font-weight: 300;
         }
-
+        
         .header p {
-            color: #666;
             font-size: 1.1em;
+            opacity: 0.9;
         }
-
-        .workflow-section {
-            margin-bottom: 40px;
-            padding: 25px;
-            background: #f8f9fa;
-            border-radius: 15px;
-            border-left: 5px solid #667eea;
+        
+        .main-content {
+            padding: 40px;
         }
-
-        .workflow-section h2 {
-            color: #333;
-            margin-bottom: 20px;
-            font-size: 1.5em;
-            display: flex;
-            align-items: center;
-        }
-
-        .step-number {
-            background: #667eea;
-            color: white;
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 15px;
-            font-weight: bold;
-        }
-
-        .file-drop-zone {
-            border: 3px dashed #667eea;
+        
+        .upload-section {
+            border: 3px dashed #3498db;
             border-radius: 15px;
             padding: 40px;
             text-align: center;
-            margin: 20px 0;
+            margin-bottom: 30px;
             transition: all 0.3s ease;
-            background: rgba(102, 126, 234, 0.05);
+            background: #f8fafc;
         }
-
-        .file-drop-zone:hover {
-            border-color: #5a67d8;
-            background: rgba(102, 126, 234, 0.1);
-            transform: translateY(-2px);
+        
+        .upload-section:hover {
+            border-color: #2980b9;
+            background: #ebf4f8;
         }
-
-        .file-drop-zone.dragover {
-            border-color: #5a67d8;
-            background: rgba(102, 126, 234, 0.15);
+        
+        .upload-section.dragover {
+            border-color: #27ae60;
+            background: #e8f8f0;
             transform: scale(1.02);
         }
-
+        
+        .upload-icon {
+            font-size: 4em;
+            color: #3498db;
+            margin-bottom: 20px;
+        }
+        
         .file-input {
             display: none;
         }
-
-        .file-button {
-            background: linear-gradient(135deg, #667eea, #764ba2);
+        
+        .upload-btn {
+            background: linear-gradient(135deg, #3498db, #2980b9);
             color: white;
             border: none;
-            padding: 12px 30px;
-            border-radius: 25px;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 1.1em;
             cursor: pointer;
-            font-size: 16px;
             transition: all 0.3s ease;
-            margin: 10px;
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
         }
-
-        .file-button:hover {
+        
+        .upload-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 8px 25px rgba(52, 152, 219, 0.4);
         }
-
-        .accession-list {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
+        
+        .file-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f8f0;
             border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
-            font-family: 'Courier New', monospace;
-            white-space: pre-wrap;
-            min-height: 100px;
-            max-height: 300px;
-            overflow-y: auto;
+            display: none;
         }
-
-        .copy-button {
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-top: 10px;
-            transition: background 0.3s ease;
-        }
-
-        .copy-button:hover {
-            background: #218838;
-        }
-
-        .process-button {
-            background: linear-gradient(135deg, #28a745, #20c997);
+        
+        .process-btn {
+            background: linear-gradient(135deg, #27ae60, #229954);
             color: white;
             border: none;
             padding: 15px 40px;
-            border-radius: 25px;
+            border-radius: 50px;
+            font-size: 1.2em;
             cursor: pointer;
-            font-size: 18px;
-            font-weight: bold;
-            margin: 20px 0;
             transition: all 0.3s ease;
-            display: block;
-            margin-left: auto;
-            margin-right: auto;
+            margin-top: 20px;
+            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.3);
         }
-
-        .process-button:hover {
+        
+        .process-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(40, 167, 69, 0.3);
+            box-shadow: 0 8px 25px rgba(39, 174, 96, 0.4);
         }
-
-        .process-button:disabled {
-            background: #6c757d;
+        
+        .process-btn:disabled {
+            background: #bdc3c7;
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
         }
-
-        .status {
-            padding: 15px;
-            border-radius: 10px;
-            margin: 15px 0;
-            font-weight: bold;
-        }
-
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-
-        .status.info {
-            background: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
-        }
-
-        .file-list {
-            margin: 15px 0;
-        }
-
-        .file-item {
-            background: white;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 10px 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .download-button {
-            background: #007bff;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 5px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-            transition: background 0.3s ease;
-        }
-
-        .download-button:hover {
-            background: #0056b3;
-        }
-
-        .instructions {
-            background: #e7f3ff;
-            border: 1px solid #b8daff;
-            border-radius: 10px;
-            padding: 20px;
+        
+        .progress {
             margin: 20px 0;
-        }
-
-        .instructions h3 {
-            color: #004085;
-            margin-bottom: 15px;
-        }
-
-        .instructions ol {
-            color: #004085;
-            padding-left: 20px;
-        }
-
-        .instructions li {
-            margin-bottom: 8px;
-        }
-
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 10px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .hidden {
             display: none;
         }
-
+        
         .progress-bar {
-            width: 100%;
-            height: 10px;
-            background: #f0f0f0;
-            border-radius: 5px;
+            background: #ecf0f1;
+            border-radius: 10px;
             overflow: hidden;
-            margin: 15px 0;
+            height: 10px;
         }
-
+        
         .progress-fill {
+            background: linear-gradient(90deg, #3498db, #2980b9);
             height: 100%;
-            background: linear-gradient(90deg, #667eea, #764ba2);
             width: 0%;
             transition: width 0.3s ease;
         }
-
-        .debug-section {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 10px;
+        
+        .status {
+            margin-top: 10px;
+            font-weight: 500;
+            color: #2c3e50;
+        }
+        
+        .results {
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .results-header {
+            background: linear-gradient(135deg, #27ae60, #229954);
+            color: white;
             padding: 20px;
-            margin: 20px 0;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            max-height: 300px;
-            overflow-y: auto;
+            border-radius: 10px 10px 0 0;
+            font-size: 1.2em;
+            font-weight: 500;
+        }
+        
+        .results-body {
+            background: #f8fafc;
+            border: 2px solid #27ae60;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            padding: 20px;
+        }
+        
+        .download-btn {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-right: 15px;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(231, 76, 60, 0.3);
+        }
+        
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(231, 76, 60, 0.4);
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #3498db;
+        }
+        
+        .stat-label {
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+        
+        .error {
+            background: #e74c3c;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #7f8c8d;
+            font-size: 0.9em;
         }
     </style>
 </head>
@@ -307,516 +243,461 @@
     <div class="container">
         <div class="header">
             <h1>GenBank Metadata Extractor</h1>
-            <p>Extract and organize metadata from FASTA sequences using GenBank records</p>
+            <p>Upload a GenBank flatfile (.gb) and get a comprehensive metadata spreadsheet</p>
         </div>
-
-        <!-- Step 1: Upload FASTA file -->
-        <div class="workflow-section">
-            <h2><span class="step-number">1</span>Upload FASTA File</h2>
-            <div class="file-drop-zone" id="fastaDropZone">
-                <p>Drag and drop your FASTA file here, or click to browse</p>
-                <button class="file-button" onclick="document.getElementById('fastaInput').click()">Choose FASTA File</button>
-                <input type="file" id="fastaInput" class="file-input" accept=".fasta,.fa,.fas,.txt" />
+        
+        <div class="main-content">
+            <div class="upload-section" id="uploadSection">
+                <div class="upload-icon">📁</div>
+                <h3>Upload Files</h3>
+                <p>Upload your FASTA file and GenBank metadata files</p>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
+                    <div>
+                        <h4>FASTA File (Required)</h4>
+                        <button class="upload-btn" onclick="document.getElementById('fastaInput').click()">
+                            Choose FASTA
+                        </button>
+                        <input type="file" id="fastaInput" class="file-input" accept=".fasta,.fa,.fas" />
+                        <div class="file-info" id="fastaInfo" style="display: none;">
+                            <strong>FASTA:</strong> <span id="fastaName"></span><br>
+                            <strong>Size:</strong> <span id="fastaSize"></span>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h4>GenBank Files (Optional)</h4>
+                        <button class="upload-btn" onclick="document.getElementById('genbankInput').click()">
+                            Choose GenBank
+                        </button>
+                        <input type="file" id="genbankInput" class="file-input" accept=".gb,.txt" multiple />
+                        <div class="file-info" id="genbankInfo" style="display: none;">
+                            <strong>GenBank files:</strong> <span id="genbankCount"></span><br>
+                            <strong>Total size:</strong> <span id="genbankSize"></span>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div id="fastaStatus"></div>
-        </div>
-
-        <!-- Step 2: Extract GenBank accessions -->
-        <div class="workflow-section" id="step2">
-            <h2><span class="step-number">2</span>GenBank Accessions (Optional)</h2>
-            <p>If your FASTA contains GenBank accessions, they will appear here for download from NCBI:</p>
-            <div class="instructions">
-                <h3>Instructions for GenBank Download:</h3>
-                <ol>
-                    <li>Copy the accession numbers below (if any)</li>
-                    <li>Go to <a href="https://www.ncbi.nlm.nih.gov/nuccore" target="_blank">NCBI GenBank</a></li>
-                    <li>Paste the numbers into the search box</li>
-                    <li>Click "Search"</li>
-                    <li>Click "Send to" → "Complete Record" → "File" → "GenBank (full)" format</li>
-                    <li>Save the .gb file and upload it in Step 3 below</li>
-                </ol>
-            </div>
-            <textarea class="accession-list" id="accessionList" readonly placeholder="Upload a FASTA file above to see GenBank accessions here..."></textarea>
-            <button class="copy-button" onclick="copyAccessions()">Copy Accession Numbers</button>
-        </div>
-
-        <!-- Step 3: Upload GenBank file and local files -->
-        <div class="workflow-section" id="step3">
-            <h2><span class="step-number">3</span>Upload GenBank Data</h2>
             
-            <h3>GenBank File (.gb format from NCBI)</h3>
-            <div class="file-drop-zone" id="genbankDropZone">
-                <p>Drag and drop the .gb file from GenBank here</p>
-                <button class="file-button" onclick="document.getElementById('genbankInput').click()">Choose GenBank File</button>
-                <input type="file" id="genbankInput" class="file-input" accept=".gb,.genbank,.txt" />
+            <div style="text-align: center; margin: 20px 0;">
+                <button class="process-btn" id="extractBtn" onclick="extractGenBankIDs()" disabled>
+                    Extract GenBank IDs from FASTA
+                </button>
             </div>
-
-            <h3>Local GenBank Files (Optional)</h3>
-            <p>Upload any unpublished GenBank flatfiles (.txt format) for local sequences:</p>
-            <div class="file-drop-zone" id="localDropZone">
-                <p>Drag and drop local GenBank files here (optional)</p>
-                <button class="file-button" onclick="document.getElementById('localInput').click()">Choose Local Files</button>
-                <input type="file" id="localInput" class="file-input" accept=".txt,.gb,.genbank" multiple />
+            
+            <div class="results" id="genbankIds" style="display: none;">
+                <div class="results-header">
+                    GenBank Accession Numbers Found
+                </div>
+                <div class="results-body">
+                    <p>Copy these IDs to search NCBI for additional records:</p>
+                    <textarea id="idsTextarea" readonly style="width: 100%; height: 120px; margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-family: monospace;"></textarea>
+                    <button class="download-btn" onclick="copyIDs()">Copy to Clipboard</button>
+                    <span id="copyStatus" style="margin-left: 10px; color: green; display: none;">Copied!</span>
+                </div>
             </div>
-
-            <div id="uploadStatus"></div>
+            
+            <div style="text-align: center;">
+                <button class="process-btn" id="processBtn" onclick="processFile()" disabled>
+                    Extract Metadata from FASTA + GenBank Files
+                </button>
+            </div>
+            
+            <div class="progress" id="progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="status" id="status">Processing...</div>
+            </div>
+            
+            <div class="error" id="error"></div>
+            
+            <div class="results" id="results">
+                <div class="results-header">
+                    Extraction Complete!
+                </div>
+                <div class="results-body">
+                    <button class="download-btn" onclick="downloadXLSX()">
+                        Download XLSX
+                    </button>
+                    <span>Your metadata has been extracted and is ready for download.</span>
+                    
+                    <div class="stats">
+                        <div class="stat-card">
+                            <div class="stat-number" id="totalRecords">0</div>
+                            <div class="stat-label">Total Records</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="withMetadata">0</div>
+                            <div class="stat-label">With Full Metadata</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="typeSpecimens">0</div>
+                            <div class="stat-label">Type Specimens</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-
-        <!-- Step 4: Process and download -->
-        <div class="workflow-section" id="step4">
-            <h2><span class="step-number">4</span>Generate Metadata Spreadsheet</h2>
-            <button class="process-button" id="processButton" onclick="processFiles()">Generate Metadata Spreadsheet</button>
-            <div class="progress-bar hidden" id="progressBar">
-                <div class="progress-fill" id="progressFill"></div>
-            </div>
-            <div id="processStatus"></div>
-            <div id="debugInfo" class="debug-section hidden"></div>
-            <div id="downloadSection" class="hidden">
-                <h3>Download Results:</h3>
-                <div id="downloadLinks"></div>
-            </div>
+        
+        <div class="footer">
+            <p>Extract metadata from GenBank records including species names, collection info, type status, locations, and bibliographic references.</p>
         </div>
     </div>
 
+    <!-- Add SheetJS library for Excel export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
         let fastaFile = null;
-        let genbankFile = null;
-        let localFiles = [];
-        let fastaSequences = [];
-        let genbankAccessions = [];
-
-        // File upload handlers
-        document.getElementById('fastaInput').addEventListener('change', handleFastaUpload);
-        document.getElementById('genbankInput').addEventListener('change', handleGenbankUpload);
-        document.getElementById('localInput').addEventListener('change', handleLocalUpload);
-
-        // Drag and drop handlers
-        setupDropZone('fastaDropZone', 'fastaInput');
-        setupDropZone('genbankDropZone', 'genbankInput');
-        setupDropZone('localDropZone', 'localInput');
-
-        function setupDropZone(dropZoneId, inputId) {
-            const dropZone = document.getElementById(dropZoneId);
-            const input = document.getElementById(inputId);
-
-            dropZone.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                dropZone.classList.add('dragover');
-            });
-
-            dropZone.addEventListener('dragleave', () => {
-                dropZone.classList.remove('dragover');
-            });
-
-            dropZone.addEventListener('drop', (e) => {
-                e.preventDefault();
-                dropZone.classList.remove('dragover');
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    if (inputId === 'localInput') {
-                        input.files = files;
-                        handleLocalUpload({ target: { files: files } });
-                    } else {
-                        // Create a new FileList with just the first file
-                        const dt = new DataTransfer();
-                        dt.items.add(files[0]);
-                        input.files = dt.files;
-                        
-                        if (inputId === 'fastaInput') {
-                            handleFastaUpload({ target: { files: dt.files } });
-                        } else if (inputId === 'genbankInput') {
-                            handleGenbankUpload({ target: { files: dt.files } });
+        let genbankFiles = [];
+        let extractedData = [];
+        let localRecords = {};
+        
+        // File handling
+        const fastaInput = document.getElementById('fastaInput');
+        const genbankInput = document.getElementById('genbankInput');
+        const uploadSection = document.getElementById('uploadSection');
+        const extractBtn = document.getElementById('extractBtn');
+        const processBtn = document.getElementById('processBtn');
+        
+        fastaInput.addEventListener('change', handleFastaSelect);
+        genbankInput.addEventListener('change', handleGenBankSelect);
+        
+        // Drag and drop for FASTA
+        uploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadSection.classList.add('dragover');
+        });
+        
+        uploadSection.addEventListener('dragleave', () => {
+            uploadSection.classList.remove('dragover');
+        });
+        
+        uploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadSection.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                // Check file type and handle appropriately
+                const file = files[0];
+                if (file.name.toLowerCase().match(/\.(fasta|fa|fas)$/)) {
+                    handleFastaFile(file);
+                } else if (file.name.toLowerCase().match(/\.(gb|txt)$/)) {
+                    handleGenBankFiles([file]);
+                }
+            }
+        });
+        
+        function handleFastaSelect(e) {
+            handleFastaFile(e.target.files[0]);
+        }
+        
+        function handleGenBankSelect(e) {
+            handleGenBankFiles(Array.from(e.target.files));
+        }
+        
+        function handleFastaFile(file) {
+            if (!file) return;
+            
+            if (!file.name.toLowerCase().match(/\.(fasta|fa|fas)$/)) {
+                showError('Please select a FASTA file (.fasta, .fa, or .fas)');
+                return;
+            }
+            
+            fastaFile = file;
+            document.getElementById('fastaName').textContent = file.name;
+            document.getElementById('fastaSize').textContent = formatFileSize(file.size);
+            document.getElementById('fastaInfo').style.display = 'block';
+            extractBtn.disabled = false;
+            hideError();
+        }
+        
+        function handleGenBankFiles(files) {
+            if (!files || files.length === 0) return;
+            
+            const validFiles = [];
+            let totalSize = 0;
+            
+            for (let file of files) {
+                if (file.name.toLowerCase().match(/\.(gb|txt)$/)) {
+                    validFiles.push(file);
+                    totalSize += file.size;
+                }
+            }
+            
+            if (validFiles.length === 0) {
+                showError('Please select GenBank files (.gb or .txt)');
+                return;
+            }
+            
+            genbankFiles = validFiles;
+            document.getElementById('genbankCount').textContent = `${validFiles.length} file(s)`;
+            document.getElementById('genbankSize').textContent = formatFileSize(totalSize);
+            document.getElementById('genbankInfo').style.display = 'block';
+            hideError();
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        async function extractGenBankIDs() {
+            if (!fastaFile) return;
+            
+            try {
+                const fastaContent = await readFileAsText(fastaFile);
+                const ids = parseGenBankIDsFromFasta(fastaContent);
+                
+                if (ids.length === 0) {
+                    showError('No GenBank accession numbers found in FASTA file');
+                    return;
+                }
+                
+                document.getElementById('idsTextarea').value = ids.join('\n');
+                document.getElementById('genbankIds').style.display = 'block';
+                
+                // Enable process button if we have IDs
+                processBtn.disabled = false;
+                
+            } catch (error) {
+                showError('Error reading FASTA file: ' + error.message);
+            }
+        }
+        
+        function parseGenBankIDsFromFasta(content) {
+            const ids = [];
+            const lines = content.split('\n');
+            
+            for (let line of lines) {
+                if (line.startsWith('>')) {
+                    // Extract sequence ID from header line
+                    const header = line.substring(1).trim();
+                    const parts = header.split(/\s+/);
+                    const seqId = parts[0];
+                    
+                    // Check if it looks like a GenBank accession
+                    if (/^[A-Z]+\d+(\.\d+)?$/.test(seqId)) {
+                        if (!ids.includes(seqId)) {
+                            ids.push(seqId);
                         }
                     }
                 }
-            });
-        }
-
-        function handleFastaUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            fastaFile = file;
-            const status = document.getElementById('fastaStatus');
-            status.innerHTML = `<div class="status info">Processing FASTA file: ${file.name}</div>`;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const content = e.target.result;
-                parseFastaFile(content, file.name);
-            };
-            reader.readAsText(file);
-        }
-
-        function handleGenbankUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            genbankFile = file;
-            updateUploadStatus();
-            checkReadyToProcess();
-        }
-
-        function handleLocalUpload(event) {
-            localFiles = Array.from(event.target.files);
-            updateUploadStatus();
-            checkReadyToProcess();
-        }
-
-        function parseFastaFile(content, filename) {
-            fastaSequences = [];
-            genbankAccessions = [];
+            }
             
+            return ids;
+        }
+        
+        function copyIDs() {
+            const textarea = document.getElementById('idsTextarea');
+            textarea.select();
+            document.execCommand('copy');
+            
+            const status = document.getElementById('copyStatus');
+            status.style.display = 'inline';
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 2000);
+        }
+        
+        async function loadGenBankFiles() {
+            localRecords = {};
+            
+            if (genbankFiles.length === 0) return;
+            
+            for (let file of genbankFiles) {
+                try {
+                    const content = await readFileAsText(file);
+                    const records = parseGenBankFile(content);
+                    
+                    for (let recordText of records) {
+                        const accessionMatch = recordText.match(/ACCESSION\s+(\S+)/);
+                        if (accessionMatch) {
+                            const accession = accessionMatch[1];
+                            const baseAccession = accession.split('.')[0];
+                            
+                            // Store multiple ways for easier lookup
+                            localRecords[accession] = recordText;
+                            localRecords[baseAccession] = recordText;
+                            
+                            // Also store by specimen voucher if available
+                            const voucherMatch = recordText.match(/specimen_voucher="([^"]+)"/);
+                            if (voucherMatch) {
+                                const voucher = voucherMatch[1];
+                                localRecords[voucher] = recordText;
+                                localRecords[voucher.replace(/[\s\-]/g, '')] = recordText;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Error loading GenBank file ${file.name}:`, error);
+                }
+            }
+            
+            console.log(`Loaded ${Object.keys(localRecords).length} local records`);
+        }
+        
+        async function processFile() {
+            if (!fastaFile) {
+                showError('Please upload a FASTA file first');
+                return;
+            }
+            
+            showProgress();
+            updateProgress(10, 'Reading files...');
+            
+            try {
+                // Load local GenBank files first
+                await loadGenBankFiles();
+                updateProgress(30, 'Reading FASTA file...');
+                
+                const fastaContent = await readFileAsText(fastaFile);
+                const fastaSequences = parseFastaFile(fastaContent);
+                updateProgress(50, 'Processing sequences...');
+                
+                extractedData = [];
+                
+                for (let i = 0; i < fastaSequences.length; i++) {
+                    const seq = fastaSequences[i];
+                    const sequenceId = seq.id.trim();
+                    
+                    updateProgress(50 + (i / fastaSequences.length) * 30, `Processing ${sequenceId}...`);
+                    
+                    let metadata = null;
+                    
+                    // First check local records
+                    const localRecord = searchLocalRecords(sequenceId);
+                    if (localRecord) {
+                        metadata = extractMetadata(localRecord);
+                        metadata['Fasta ID'] = sequenceId;
+                        metadata['GenBank Accession'] = metadata['GenBank Accession'] + ' (local)';
+                    } else {
+                        // Create entry for sequences not found in local files
+                        metadata = {
+                            'Fasta ID': sequenceId,
+                            'Species Name': 'Unknown',
+                            'Species Name Genbank': 'Unknown',
+                            'Collection/Fungarium Number': '',
+                            'Type status': '',
+                            'GenBank Accession': 'Not in local files',
+                            'Location': '',
+                            'Location simplified': '',
+                            'Isolation Source': '',
+                            'Collection Date': '',
+                            'Collected By': '',
+                            'iNat/MO Number': '',
+                            'Notes': 'Sequence not found in uploaded GenBank files',
+                            'Reference': '',
+                            'Bibliography': ''
+                        };
+                    }
+                    
+                    extractedData.push(metadata);
+                }
+                
+                updateProgress(90, 'Finalizing...');
+                await new Promise(resolve => setTimeout(resolve, 500));
+                updateProgress(100, 'Complete!');
+                
+                showResults();
+                
+            } catch (error) {
+                console.error('Error processing files:', error);
+                showError('Error processing files: ' + error.message);
+                hideProgress();
+            }
+        }
+        
+        function parseFastaFile(content) {
+            const sequences = [];
             const lines = content.split('\n');
+            let currentSeq = null;
             
             for (let line of lines) {
                 line = line.trim();
                 if (line.startsWith('>')) {
-                    const seqId = line.substring(1).split(' ')[0].trim();
-                    fastaSequences.push(seqId);
-                    
-                    // Check if it looks like a GenBank accession
-                    if (/^[A-Z]+\d+(\.\d+)?$/i.test(seqId)) {
-                        genbankAccessions.push(seqId);
+                    // New sequence header
+                    if (currentSeq) {
+                        sequences.push(currentSeq);
                     }
+                    const header = line.substring(1).trim();
+                    const parts = header.split(/\s+/);
+                    currentSeq = {
+                        id: parts[0],
+                        description: parts.slice(1).join(' '),
+                        sequence: ''
+                    };
+                } else if (line && currentSeq) {
+                    // Sequence data
+                    currentSeq.sequence += line;
                 }
             }
-
-            const status = document.getElementById('fastaStatus');
-            status.innerHTML = `
-                <div class="status success">
-                    FASTA file processed successfully!<br>
-                    Found ${fastaSequences.length} sequences, ${genbankAccessions.length} GenBank accessions
-                </div>
-            `;
-
-            if (genbankAccessions.length > 0) {
-                document.getElementById('accessionList').textContent = genbankAccessions.join('\n');
-            } else {
-                document.getElementById('accessionList').placeholder = "No GenBank accessions found in FASTA file. You can still process using local files.";
-            }
-        }
-
-        function copyAccessions() {
-            const textarea = document.getElementById('accessionList');
-            textarea.select();
-            document.execCommand('copy');
             
-            const button = event.target;
-            const originalText = button.textContent;
-            button.textContent = 'Copied!';
-            button.style.background = '#28a745';
+            // Add the last sequence
+            if (currentSeq) {
+                sequences.push(currentSeq);
+            }
             
-            setTimeout(() => {
-                button.textContent = originalText;
-                button.style.background = '#28a745';
-            }, 2000);
+            return sequences;
         }
-
-        function updateUploadStatus() {
-            const status = document.getElementById('uploadStatus');
-            let statusHtml = '';
-
-            if (genbankFile) {
-                statusHtml += `<div class="status success">GenBank file: ${genbankFile.name}</div>`;
-            }
-
-            if (localFiles.length > 0) {
-                statusHtml += `<div class="status success">Local files: ${localFiles.map(f => f.name).join(', ')}</div>`;
-            }
-
-            status.innerHTML = statusHtml;
-        }
-
-        function checkReadyToProcess() {
-            const hasData = genbankFile || localFiles.length > 0;
-            if (hasData && fastaSequences.length > 0) {
-                document.getElementById('step4').style.display = 'block';
-            }
-        }
-
-        function debugLog(message) {
-            const debugDiv = document.getElementById('debugInfo');
-            debugDiv.classList.remove('hidden');
-            debugDiv.innerHTML += message + '\n';
-        }
-
-        function processFiles() {
-            const button = document.getElementById('processButton');
-            const status = document.getElementById('processStatus');
-            const progressBar = document.getElementById('progressBar');
-            const progressFill = document.getElementById('progressFill');
-
-            // Clear debug info
-            document.getElementById('debugInfo').innerHTML = '';
-
-            button.disabled = true;
-            button.innerHTML = '<span class="loading"></span>Processing...';
-            status.innerHTML = '<div class="status info">Processing metadata...</div>';
-            progressBar.classList.remove('hidden');
-
-            // Simulate progress
-            let progress = 0;
-            const progressInterval = setInterval(() => {
-                progress += 10;
-                progressFill.style.width = progress + '%';
-                if (progress >= 90) {
-                    clearInterval(progressInterval);
+        
+        function searchLocalRecords(sequenceId) {
+            if (Object.keys(localRecords).length === 0) return null;
+            
+            // Try different matching strategies
+            const searchKeys = [
+                sequenceId,
+                sequenceId.split('.')[0],  // Remove version
+                sequenceId.replace(/[-_]/g, ''),  // Remove dashes and underscores
+                sequenceId.toUpperCase(),
+            ];
+            
+            // Direct lookup
+            for (let key of searchKeys) {
+                if (localRecords[key]) {
+                    return localRecords[key];
                 }
-            }, 200);
-
-            Promise.all([
-                genbankFile ? parseGenbankFile(genbankFile) : Promise.resolve({}),
-                Promise.all(localFiles.map(file => parseGenbankFile(file)))
-            ]).then(([genbankRecords, localRecordsArrays]) => {
-                clearInterval(progressInterval);
-                progressFill.style.width = '100%';
-
-                debugLog(`GenBank records parsed: ${Object.keys(genbankRecords).length}`);
-                
-                // Combine all local records
-                const localRecords = {};
-                localRecordsArrays.forEach(records => {
-                    Object.assign(localRecords, records);
-                });
-
-                debugLog(`Local records parsed: ${Object.keys(localRecords).length}`);
-
-                const allRecords = { ...genbankRecords, ...localRecords };
-                debugLog(`Total records available: ${Object.keys(allRecords).length}`);
-                debugLog(`FASTA sequences to process: ${fastaSequences.length}`);
-
-                const metadata = extractMetadata(fastaSequences, allRecords);
-                
-                generateSpreadsheet(metadata);
-                
-                button.disabled = false;
-                button.textContent = 'Generate Metadata Spreadsheet';
-                status.innerHTML = '<div class="status success">Metadata extraction completed successfully!</div>';
-                
-                setTimeout(() => {
-                    progressBar.classList.add('hidden');
-                }, 1000);
-            }).catch(error => {
-                clearInterval(progressInterval);
-                button.disabled = false;
-                button.textContent = 'Generate Metadata Spreadsheet';
-                status.innerHTML = `<div class="status error">Error: ${error.message}</div>`;
-                progressBar.classList.add('hidden');
-                debugLog(`Error: ${error.message}`);
-                console.error(error);
-            });
+            }
+            
+            // Partial matching for voucher numbers
+            for (let [storedKey, record] of Object.entries(localRecords)) {
+                if (sequenceId.includes(storedKey) || storedKey.includes(sequenceId)) {
+                    return record;
+                }
+            }
+            
+            return null;
         }
-
-        function parseGenbankFile(file) {
+        
+        function readFileAsText(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onload = function(e) {
-                    try {
-                        const content = e.target.result;
-                        const records = parseGenbankContent(content);
-                        resolve(records);
-                    } catch (error) {
-                        reject(error);
-                    }
-                };
-                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = e => reject(new Error('Failed to read file'));
                 reader.readAsText(file);
             });
         }
-
-        function parseGenbankContent(content) {
-            const records = {};
-            const entries = content.split('//\n').filter(entry => entry.trim().length > 0);
-
-            debugLog(`Found ${entries.length} GenBank entries to parse`);
-
-            for (let i = 0; i < entries.length; i++) {
-                const entry = entries[i];
-                try {
-                    const record = parseGenbankEntry(entry);
-                    if (record && record.accession) {
-                        debugLog(`Parsed record: ${record.accession} - ${record.organism}`);
-                        
-                        // Store by accession
-                        records[record.accession] = record;
-                        records[record.accession.split('.')[0]] = record;
-                        
-                        // Store by specimen voucher if available
-                        if (record.specimen_voucher) {
-                            records[record.specimen_voucher] = record;
-                            // Clean versions for matching
-                            const clean = record.specimen_voucher.replace(/[\s\-]/g, '');
-                            records[clean] = record;
-                        }
-                    }
-                } catch (error) {
-                    debugLog(`Error parsing GenBank entry ${i}: ${error.message}`);
-                    console.warn('Error parsing GenBank entry:', error);
+        
+        function parseGenBankFile(content) {
+            const records = [];
+            const entries = content.split('\n//\n');
+            
+            for (let entry of entries) {
+                entry = entry.trim();
+                if (entry && entry.includes('LOCUS')) {
+                    records.push(entry);
                 }
             }
-
+            
             return records;
         }
-
-        function parseGenbankEntry(entry) {
-            const lines = entry.split('\n');
-            const record = {
-                accession: '',
-                organism: '',
-                specimen_voucher: '',
-                geo_loc_name: '',
-                collection_date: '',
-                collected_by: '',
-                isolation_source: '',
-                type_material: '',
-                references: [],
-                features: []
-            };
-
-            let currentSection = '';
-            let currentFeature = null;
-            let currentReference = null;
-            let continuationLine = '';
-
-            for (let i = 0; i < lines.length; i++) {
-                let line = lines[i];
-                
-                // Handle ACCESSION line
-                if (line.startsWith('ACCESSION')) {
-                    record.accession = line.substring(10).trim().split(' ')[0];
-                }
-                
-                // Handle SOURCE/ORGANISM
-                else if (line.startsWith('  ORGANISM')) {
-                    record.organism = line.substring(10).trim();
-                }
-                
-                // Handle FEATURES section
-                else if (line.startsWith('FEATURES')) {
-                    currentSection = 'features';
-                }
-                
-                // Handle feature lines
-                else if (currentSection === 'features' && line.match(/^\s{5}(\w+)\s+/)) {
-                    const match = line.match(/^\s{5}(\w+)\s+(.+)/);
-                    if (match) {
-                        currentFeature = {
-                            type: match[1],
-                            location: match[2],
-                            qualifiers: {}
-                        };
-                        record.features.push(currentFeature);
-                    }
-                }
-                
-                // Handle qualifier lines
-                else if (currentSection === 'features' && currentFeature && line.match(/^\s{21}\/(\w+)=/)) {
-                    const match = line.match(/^\s{21}\/(\w+)=(.+)/);
-                    if (match) {
-                        const qualifier = match[1];
-                        let value = match[2];
-                        
-                        // Handle multi-line values
-                        if (value.startsWith('"') && !value.endsWith('"')) {
-                            // This is a multi-line qualifier
-                            let j = i + 1;
-                            while (j < lines.length && lines[j].match(/^\s{21}/) && !lines[j].includes('/')) {
-                                value += ' ' + lines[j].substring(21).trim();
-                                i = j; // Skip these lines in main loop
-                                j++;
-                            }
-                        }
-                        
-                        // Remove quotes
-                        if (value.startsWith('"') && value.endsWith('"')) {
-                            value = value.slice(1, -1);
-                        }
-                        
-                        currentFeature.qualifiers[qualifier] = value;
-                        
-                        // Store important qualifiers at record level
-                        if (qualifier === 'specimen_voucher') record.specimen_voucher = value;
-                        else if (qualifier === 'geo_loc_name') record.geo_loc_name = value;
-                        else if (qualifier === 'collection_date') record.collection_date = value;
-                        else if (qualifier === 'collected_by') record.collected_by = value;
-                        else if (qualifier === 'isolation_source') record.isolation_source = value;
-                        else if (qualifier === 'type_material') record.type_material = value;
-                    }
-                }
-                
-                // Handle REFERENCE section
-                else if (line.startsWith('REFERENCE')) {
-                    currentSection = 'reference';
-                    currentReference = {
-                        authors: '',
-                        title: '',
-                        journal: '',
-                        year: ''
-                    };
-                    record.references.push(currentReference);
-                }
-                else if (currentSection === 'reference' && currentReference) {
-                    if (line.startsWith('  AUTHORS')) {
-                        currentReference.authors = line.substring(10).trim();
-                    }
-                    else if (line.startsWith('  TITLE')) {
-                        currentReference.title = line.substring(8).trim();
-                    }
-                    else if (line.startsWith('  JOURNAL')) {
-                        currentReference.journal = line.substring(10).trim();
-                        
-                        // Extract year from journal
-                        const yearMatch = currentReference.journal.match(/\((\d{4})\)/);
-                        if (yearMatch) {
-                            currentReference.year = yearMatch[1];
-                        }
-                    }
-                    // Handle continuation lines for references
-                    else if (line.match(/^\s{12}/) && !line.startsWith('REFERENCE')) {
-                        const continuation = line.substring(12).trim();
-                        if (currentReference.title && !currentReference.journal) {
-                            currentReference.title += ' ' + continuation;
-                        } else if (currentReference.journal) {
-                            currentReference.journal += ' ' + continuation;
-                            // Re-extract year if needed
-                            const yearMatch = currentReference.journal.match(/\((\d{4})\)/);
-                            if (yearMatch) {
-                                currentReference.year = yearMatch[1];
-                            }
-                        }
-                    }
-                }
-                
-                // Reset section if we hit a new major section
-                else if (line.startsWith('ORIGIN') || line.startsWith('CONTIG') || line.startsWith('//')) {
-                    currentSection = '';
-                }
-            }
-
-            return record;
-        }
-
-        function extractMetadata(sequences, records) {
-            const metadata = [];
-
-            debugLog(`Starting metadata extraction for ${sequences.length} sequences`);
-
-            for (let seqId of sequences) {
-                const entry = createMetadataEntry(seqId, records);
-                metadata.push(entry);
-                debugLog(`Processed ${seqId}: ${entry['Species Name']} - ${entry['GenBank Accession']}`);
-            }
-
-            return metadata;
-        }
-
-        function createMetadataEntry(seqId, records) {
-            // Try to find record by various matching strategies
-            let record = findRecord(seqId, records);
-            
-            const entry = {
-                'Fasta ID': seqId,
+        
+        function extractMetadata(recordText) {
+            const metadata = {
+                'Fasta ID': '',
                 'Species Name': 'Unknown',
                 'Species Name Genbank': 'Unknown',
                 'Collection/Fungarium Number': '',
@@ -832,308 +713,198 @@
                 'Reference': '',
                 'Bibliography': ''
             };
-
-            if (record) {
-                debugLog(`Found GenBank record for ${seqId}: ${record.accession}`);
-                
-                // Extract species name
-                if (record.organism) {
-                    const parts = record.organism.split(' ');
-                    if (parts.length >= 2) {
-                        entry['Species Name'] = `${parts[0]} ${parts[1]}`;
-                        entry['Species Name Genbank'] = entry['Species Name'];
-                    } else {
-                        entry['Species Name'] = record.organism;
-                        entry['Species Name Genbank'] = record.organism;
-                    }
+            
+            // Extract accession number
+            const accessionMatch = recordText.match(/ACCESSION\s+(\S+)/);
+            if (accessionMatch) {
+                metadata['GenBank Accession'] = accessionMatch[1];
+                metadata['Fasta ID'] = accessionMatch[1];
+            }
+            
+            // Extract organism/species
+            const organismMatch = recordText.match(/ORGANISM\s+(.+?)(?:\n\s+|$)/);
+            if (organismMatch) {
+                const organism = organismMatch[1].trim();
+                const parts = organism.split(' ');
+                if (parts.length >= 2) {
+                    metadata['Species Name'] = `${parts[0]} ${parts[1]}`;
+                    metadata['Species Name Genbank'] = `${parts[0]} ${parts[1]}`;
+                } else {
+                    metadata['Species Name'] = organism;
+                    metadata['Species Name Genbank'] = organism;
                 }
-
-                // Basic fields
-                entry['GenBank Accession'] = record.accession || 'Unpublished';
-                entry['Collection/Fungarium Number'] = record.specimen_voucher || '';
-                entry['Location'] = record.geo_loc_name || '';
-                entry['Collection Date'] = record.collection_date || '';
-                entry['Collected By'] = record.collected_by || '';
-                entry['Isolation Source'] = record.isolation_source || '';
-
-                // Process location for simplified version
-                if (entry['Location']) {
-                    const parts = entry['Location'].split(':');
-                    if (parts.length >= 2) {
+            }
+            
+            // Extract source features
+            const sourceMatch = recordText.match(/source\s+\d+\.\.\d+\n([\s\S]*?)(?=\n\s{5}\S|\nORIGIN|\n\/\/|$)/);
+            if (sourceMatch) {
+                const sourceSection = sourceMatch[1];
+                
+                // Extract qualifiers
+                const qualifiers = {};
+                const qualifierMatches = sourceSection.matchAll(/\/(\w+)="?([^"\n]+)"?/g);
+                for (let match of qualifierMatches) {
+                    qualifiers[match[1]] = match[2];
+                }
+                
+                // Location - check both geo_loc_name and country
+                if (qualifiers.geo_loc_name) {
+                    metadata['Location'] = qualifiers.geo_loc_name;
+                    // Parse location for simplified version
+                    const location = qualifiers.geo_loc_name;
+                    if (location.includes(':')) {
+                        const parts = location.split(':');
                         const country = parts[0].trim();
                         const region = parts[1].trim();
-                        
-                        if (['USA', 'Canada'].includes(country) && region) {
-                            const state = region.split(',')[0].trim();
-                            entry['Location simplified'] = `${country}: ${state}`;
+                        if (country === 'USA' || country === 'Canada') {
+                            // Extract state/province (first part before comma)
+                            const stateProv = region.split(',')[0].trim();
+                            metadata['Location simplified'] = `${country}: ${stateProv}`;
                         } else {
-                            entry['Location simplified'] = country;
+                            metadata['Location simplified'] = country;
                         }
                     } else {
-                        entry['Location simplified'] = entry['Location'];
+                        // Handle cases like just "Canada" or "Jamaica"
+                        metadata['Location simplified'] = location;
                     }
+                } else if (qualifiers.country) {
+                    metadata['Location'] = qualifiers.country;
+                    metadata['Location simplified'] = qualifiers.country;
                 }
-
-                // Extract type status
-                if (record.type_material) {
-                    const typeStatuses = ['holotype', 'paratype', 'isotype', 'neotype', 'lectotype', 'syntype', 'epitype'];
+                
+                // Collection info
+                if (qualifiers.specimen_voucher) {
+                    metadata['Collection/Fungarium Number'] = qualifiers.specimen_voucher;
+                }
+                
+                // Collection date
+                if (qualifiers.collection_date) {
+                    metadata['Collection Date'] = qualifiers.collection_date;
+                }
+                
+                // Collected by
+                if (qualifiers.collected_by) {
+                    metadata['Collected By'] = qualifiers.collected_by;
+                }
+                
+                // Isolation source
+                if (qualifiers.isolation_source) {
+                    metadata['Isolation Source'] = qualifiers.isolation_source;
+                } else if (qualifiers.host) {
+                    metadata['Isolation Source'] = `Host: ${qualifiers.host}`;
+                }
+                
+                // Type status - check multiple fields
+                const typeStatuses = ['HOLOTYPE', 'ISOTYPE', 'PARATYPE', 'NEOTYPE', 'LECTOTYPE', 'SYNTYPE', 'TYPE', 'EPITYPE'];
+                for (let [key, value] of Object.entries(qualifiers)) {
                     for (let status of typeStatuses) {
-                        if (record.type_material.toLowerCase().includes(status)) {
-                            entry['Type status'] = status.charAt(0).toUpperCase() + status.slice(1);
+                        if (value.toUpperCase().includes(status)) {
+                            metadata['Type status'] = status.charAt(0) + status.slice(1).toLowerCase();
                             break;
                         }
                     }
+                    if (metadata['Type status']) break;
                 }
-
-                // Extract iNat/MO numbers from various fields
-                const searchText = [
-                    record.specimen_voucher || '',
-                    record.isolation_source || '',
-                    entry['Notes'] || '',
-                    // Also check if the specimen voucher itself contains iNat info
-                    seqId
-                ].join(' ');
                 
-                const inatMatch = searchText.match(/(inat|inaturalist)[:\s#]*(\d+)/i);
-                const moMatch = searchText.match(/(mo|mushroom\s*observer)[:\s#]*(\d+)/i);
-                
-                if (inatMatch) {
-                    entry['iNat/MO Number'] = `iNaturalist #${inatMatch[2]}`;
-                } else if (moMatch) {
-                    entry['iNat/MO Number'] = `Mushroom Observer #${moMatch[2]}`;
+                // iNaturalist/MO numbers
+                for (let [key, value] of Object.entries(qualifiers)) {
+                    const inatMatch = value.match(/(inat\s*#|inaturalist\s*#?|iNAT:?)\s*(\d+)/i);
+                    const moMatch = value.match(/(MO\s*#|Mushroom\s*observer\s*#?)\s*(\d+)/i);
+                    
+                    if (inatMatch) {
+                        metadata['iNat/MO Number'] = `iNaturalist #${inatMatch[2]}`;
+                        break;
+                    } else if (moMatch) {
+                        metadata['iNat/MO Number'] = `Mushroom Observer #${moMatch[2]}`;
+                        break;
+                    }
                 }
-
-                // Create bibliography
-                if (record.references && record.references.length > 0) {
-                    const ref = record.references[0];
-                    const bibParts = [];
-                    
-                    if (ref.authors) {
-                        const authors = ref.authors.split(', ');
-                        if (authors.length === 1) {
-                            bibParts.push(authors[0]);
-                        } else if (authors.length === 2) {
-                            bibParts.push(`${authors[0]} & ${authors[1]}`);
-                        } else {
-                            bibParts.push(`${authors[0]} et al.`);
-                        }
-                    }
-                    
-                    if (ref.year) {
-                        bibParts.push(`(${ref.year})`);
-                    }
-                    
-                    if (ref.title) {
-                        bibParts.push(`${ref.title}.`);
-                    }
-                    
-                    if (ref.journal) {
-                        if (ref.journal.toLowerCase().includes('unpublished')) {
-                            bibParts.push('Unpublished.');
-                        } else if (ref.journal.toLowerCase().includes('submitted') || ref.journal.toLowerCase().includes('direct submission')) {
-                            bibParts.push('Direct Submission.');
-                        } else {
-                            bibParts.push(`${ref.journal}.`);
-                        }
-                    }
-                    
-                    entry['Bibliography'] = bibParts.join(' ');
-                    
-                    // Create reference
-                    if (ref.authors && ref.year) {
-                        const firstAuthor = ref.authors.split(',')[0];
-                        entry['Reference'] = `${firstAuthor} ${ref.year}`;
-                    } else {
-                        entry['Reference'] = entry['Bibliography'].split('.')[0];
-                    }
+            }
+            
+            // Extract reference information
+            const referenceMatch = recordText.match(/REFERENCE\s+\d+[\s\S]*?AUTHORS\s+([^\n]+)[\s\S]*?JOURNAL\s+([^\n]+)/);
+            if (referenceMatch) {
+                const authors = referenceMatch[1].trim();
+                const journal = referenceMatch[2].trim();
+                
+                // Format authors
+                const authorList = authors.split(',').map(a => a.trim());
+                let formattedAuthors;
+                if (authorList.length === 1) {
+                    formattedAuthors = authorList[0];
+                } else if (authorList.length === 2) {
+                    formattedAuthors = `${authorList[0]} & ${authorList[1]}`;
                 } else {
-                    entry['Reference'] = 'Unpublished';
-                    entry['Bibliography'] = 'Unpublished';
+                    formattedAuthors = `${authorList[0]} et al.`;
                 }
-            } else {
-                debugLog(`No GenBank record found for ${seqId}, using local parsing`);
-                // No GenBank record found - try to parse local sequence
-                const localEntry = parseLocalSequence(seqId);
-                Object.assign(entry, localEntry);
-            }
-
-            return entry;
-        }
-
-        function findRecord(seqId, records) {
-            // Try exact match
-            if (records[seqId]) {
-                debugLog(`Found exact match for ${seqId}`);
-                return records[seqId];
-            }
-            
-            // Try without version
-            const baseAccession = seqId.split('.')[0];
-            if (records[baseAccession]) {
-                debugLog(`Found base accession match for ${seqId} -> ${baseAccession}`);
-                return records[baseAccession];
-            }
-            
-            // Try with cleaned voucher variations
-            const cleanId = seqId.replace(/[\s\-_]/g, '');
-            if (records[cleanId]) {
-                debugLog(`Found cleaned match for ${seqId} -> ${cleanId}`);
-                return records[cleanId];
-            }
-            
-            // Try partial matching for voucher numbers
-            for (let key in records) {
-                if (seqId.includes(key) || key.includes(seqId)) {
-                    debugLog(`Found partial match for ${seqId} -> ${key}`);
-                    return records[key];
-                }
-            }
-            
-            debugLog(`No record found for ${seqId}`);
-            return null;
-        }
-
-        function parseLocalSequence(seqId) {
-            const entry = {
-                'Fasta ID': seqId,
-                'Species Name': 'Unknown',
-                'Species Name Genbank': 'Unknown',
-                'Collection/Fungarium Number': '',
-                'Type status': '',
-                'GenBank Accession': 'Unpublished',
-                'Location': '',
-                'Location simplified': '',
-                'Isolation Source': '',
-                'Collection Date': '',
-                'Collected By': '',
-                'iNat/MO Number': '',
-                'Notes': '',
-                'Reference': 'Unpublished',
-                'Bibliography': 'Unpublished'
-            };
-
-            // Check for type status
-            const typeStatuses = ['HOLOTYPE', 'ISOTYPE', 'PARATYPE', 'NEOTYPE', 'LECTOTYPE', 'SYNTYPE', 'TYPE', 'EPITYPE'];
-            for (let status of typeStatuses) {
-                if (seqId.toUpperCase().includes(status)) {
-                    entry['Type status'] = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
-                    break;
-                }
-            }
-
-            // Pattern matching for species names
-            let match = seqId.match(/^([A-Z]\.)_([a-z]+)_(.+)/);
-            if (match) {
-                entry['Species Name'] = `Gymnopilus ${match[2]}`;
-                entry['Species Name Genbank'] = entry['Species Name'];
-                entry['Collection/Fungarium Number'] = match[3].replace(/_/g, ' ');
-            } else if (seqId.startsWith('NR_')) {
-                const speciesMatch = seqId.match(/Gymnopilus_([a-z]+)/);
-                if (speciesMatch) {
-                    entry['Species Name'] = `Gymnopilus ${speciesMatch[1]}`;
-                    entry['Species Name Genbank'] = entry['Species Name'];
-                }
-                if (seqId.includes('TYPE')) {
-                    entry['Notes'] = 'From TYPE material';
-                }
-            } else if (seqId.match(/^G_([a-z]+)/)) {
-                const speciesMatch = seqId.match(/^G_([a-z]+)(.+)?/);
-                if (speciesMatch) {
-                    entry['Species Name'] = `Gymnopilus ${speciesMatch[1]}`;
-                    entry['Species Name Genbank'] = entry['Species Name'];
-                    if (speciesMatch[2]) {
-                        entry['Collection/Fungarium Number'] = speciesMatch[2];
-                        if (speciesMatch[2].match(/NYBG\d+/)) {
-                            entry['Notes'] = 'NYBG herbarium specimen';
-                        }
-                    }
-                }
-            } else if (seqId.match(/^G\.\s+[a-z]+/)) {
-                const speciesMatch = seqId.match(/^G\.\s+([a-z]+)/);
-                if (speciesMatch) {
-                    entry['Species Name'] = `Gymnopilus ${speciesMatch[1]}`;
-                    entry['Species Name Genbank'] = entry['Species Name'];
-                }
-            } else {
-                entry['Notes'] = `Could not parse sequence ID: ${seqId}`;
-            }
-
-            return entry;
-        }
-
-        function generateSpreadsheet(metadata) {
-            // Create workbook
-            const wb = XLSX.utils.book_new();
-            
-            // Convert metadata to worksheet
-            const ws = XLSX.utils.json_to_sheet(metadata);
-            
-            // Add worksheet to workbook
-            XLSX.utils.book_append_sheet(wb, ws, "Metadata");
-            
-            // Generate file
-            const filename = `genbank_metadata_${new Date().toISOString().split('T')[0]}.xlsx`;
-            XLSX.writeFile(wb, filename);
-            
-            // Show download section
-            const downloadSection = document.getElementById('downloadSection');
-            const downloadLinks = document.getElementById('downloadLinks');
-            
-            downloadLinks.innerHTML = `
-                <div class="file-item">
-                    <div>
-                        <strong>${filename}</strong><br>
-                        <small>Excel spreadsheet with ${metadata.length} entries</small>
-                    </div>
-                    <button class="download-button" onclick="downloadData('xlsx')">Download XLSX</button>
-                </div>
-                <div class="file-item">
-                    <div>
-                        <strong>${filename.replace('.xlsx', '.json')}</strong><br>
-                        <small>JSON data for further processing</small>
-                    </div>
-                    <button class="download-button" onclick="downloadData('json')">Download JSON</button>
-                </div>
-            `;
-            
-            downloadSection.classList.remove('hidden');
-            
-            // Store data for additional downloads
-            window.processedMetadata = metadata;
-        }
-
-        function downloadData(format) {
-            if (!window.processedMetadata) return;
-            
-            const timestamp = new Date().toISOString().split('T')[0];
-            
-            if (format === 'xlsx') {
-                const wb = XLSX.utils.book_new();
-                const ws = XLSX.utils.json_to_sheet(window.processedMetadata);
-                XLSX.utils.book_append_sheet(wb, ws, "Metadata");
-                XLSX.writeFile(wb, `genbank_metadata_${timestamp}.xlsx`);
-            } else if (format === 'json') {
-                const jsonData = {
-                    metadata: {
-                        processing_date: new Date().toISOString(),
-                        total_entries: window.processedMetadata.length,
-                        fasta_file: fastaFile ? fastaFile.name : 'unknown',
-                        genbank_file: genbankFile ? genbankFile.name : 'none',
-                        local_files: localFiles.map(f => f.name)
-                    },
-                    entries: window.processedMetadata
-                };
                 
-                const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `genbank_metadata_${timestamp}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                // Extract year
+                const yearMatch = journal.match(/\((\d{4})\)/);
+                const year = yearMatch ? yearMatch[1] : '';
+                
+                metadata['Reference'] = year ? `${formattedAuthors} ${year}` : formattedAuthors;
+                metadata['Bibliography'] = `${formattedAuthors}${year ? ` (${year})` : ''}. ${journal}`;
             }
+            
+            return metadata;
+        }
+        
+        function showProgress() {
+            document.getElementById('progress').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            hideError();
+        }
+        
+        function updateProgress(percent, status) {
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('status').textContent = status;
+        }
+        
+        function hideProgress() {
+            document.getElementById('progress').style.display = 'none';
+        }
+        
+        function showResults() {
+            hideProgress();
+            document.getElementById('results').style.display = 'block';
+            
+            // Update stats
+            const total = extractedData.length;
+            const withMetadata = extractedData.filter(r => r['Species Name'] !== 'Unknown').length;
+            const typeSpecimens = extractedData.filter(r => r['Type status']).length;
+            
+            document.getElementById('totalRecords').textContent = total;
+            document.getElementById('withMetadata').textContent = withMetadata;
+            document.getElementById('typeSpecimens').textContent = typeSpecimens;
+        }
+        
+        function downloadXLSX() {
+            if (extractedData.length === 0) return;
+            
+            // Create workbook and worksheet
+            const ws = XLSX.utils.json_to_sheet(extractedData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "GenBank Metadata");
+            
+            // Generate filename from FASTA file
+            let filename = 'genbank_metadata.xlsx';
+            if (fastaFile) {
+                const baseName = fastaFile.name.replace(/\.[^/.]+$/, ""); // Remove extension
+                filename = `${baseName}_metadata.xlsx`;
+            }
+            
+            // Download the file
+            XLSX.writeFile(wb, filename);
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
         }
     </script>
 </body>
