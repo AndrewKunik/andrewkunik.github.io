@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sequence Namer for Trees</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50, #27ae60);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .main-content {
+            padding: 40px;
+        }
+        
+        .upload-section {
+            border: 3px dashed #27ae60;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+            background: #f8fafc;
+        }
+        
+        .upload-section:hover {
+            border-color: #229954;
+            background: #e8f8f0;
+        }
+        
+        .upload-section.dragover {
+            border-color: #27ae60;
+            background: #e8f8f0;
+            transform: scale(1.02);
+        }
+        
+        .upload-icon {
+            font-size: 3em;
+            color: #27ae60;
+            margin-bottom: 15px;
+        }
+        
+        .file-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 20px;
+        }
+        
+        .file-section {
+            text-align: center;
+        }
+        
+        .file-section h4 {
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .upload-btn {
+            background: linear-gradient(135deg, #27ae60, #229954);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.3);
+            margin-bottom: 10px;
+        }
+        
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(39, 174, 96, 0.4);
+        }
+        
+        .file-info {
+            margin-top: 15px;
+            padding: 15px;
+            background: #e8f8f0;
+            border-radius: 10px;
+            display: none;
+            font-size: 0.9em;
+        }
+        
+        .process-btn {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 50px;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+        }
+        
+        .process-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(52, 152, 219, 0.4);
+        }
+        
+        .process-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .progress {
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .progress-bar {
+            background: #ecf0f1;
+            border-radius: 10px;
+            overflow: hidden;
+            height: 10px;
+        }
+        
+        .progress-fill {
+            background: linear-gradient(90deg, #27ae60, #229954);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .status {
+            margin-top: 10px;
+            font-weight: 500;
+            color: #2c3e50;
+        }
+        
+        .results {
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .results-header {
+            background: linear-gradient(135deg, #27ae60, #229954);
+            color: white;
+            padding: 20px;
+            border-radius: 10px 10px 0 0;
+            font-size: 1.2em;
+            font-weight: 500;
+        }
+        
+        .results-body {
+            background: #f8fafc;
+            border: 2px solid #27ae60;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            padding: 20px;
+        }
+        
+        .download-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .download-btn {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(231, 76, 60, 0.3);
+        }
+        
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(231, 76, 60, 0.4);
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat-number {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #27ae60;
+        }
+        
+        .stat-label {
+            color: #7f8c8d;
+            margin-top: 5px;
+            font-size: 0.9em;
+        }
+        
+        .error {
+            background: #e74c3c;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+        
+        .info-box {
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        
+        .info-box h4 {
+            color: #2980b9;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Sequence Namer for Trees</h1>
+            <p>Transform FASTA sequences and phylogenetic trees with descriptive names from metadata</p>
+        </div>
+        
+        <div class="main-content">
+            <div class="info-box">
+                <h4>How it works:</h4>
+                <p>Upload a FASTA file (.fasta, .fa) or phylogenetic tree file (.tre) along with an Excel metadata file. The tool will match sequence IDs to metadata and create tree-ready files with descriptive names like: <code>GenBankID_SpeciesName_Location_TypeStatus</code></p>
+            </div>
+            
+            <div class="upload-section" id="uploadSection">
+                <div class="upload-icon">🌳</div>
+                <h3>Upload Files</h3>
+                <p>Upload your sequence/tree file and metadata Excel file</p>
+                
+                <div class="file-grid">
+                    <div class="file-section">
+                        <h4>Sequence/Tree File (Required)</h4>
+                        <button class="upload-btn" onclick="document.getElementById('sequenceInput').click()">
+                            Choose FASTA/Tree File
+                        </button>
+                        <input type="file" id="sequenceInput" class="file-input" accept=".fasta,.fa,.fas,.tre,.tree,.nwk" />
+                        <div class="file-info" id="sequenceInfo">
+                            <strong>File:</strong> <span id="sequenceName"></span><br>
+                            <strong>Type:</strong> <span id="sequenceType"></span><br>
+                            <strong>Size:</strong> <span id="sequenceSize"></span>
+                        </div>
+                    </div>
+                    
+                    <div class="file-section">
+                        <h4>Metadata Excel File (Required)</h4>
+                        <button class="upload-btn" onclick="document.getElementById('metadataInput').click()">
+                            Choose Excel File
+                        </button>
+                        <input type="file" id="metadataInput" class="file-input" accept=".xlsx,.xls" />
+                        <div class="file-info" id="metadataInfo">
+                            <strong>File:</strong> <span id="metadataName"></span><br>
+                            <strong>Size:</strong> <span id="metadataSize"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="text-align: center;">
+                <button class="process-btn" id="processBtn" onclick="processFiles()" disabled>
+                    Generate Tree-Ready Files
+                </button>
+            </div>
+            
+            <div class="progress" id="progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="status" id="status">Processing...</div>
+            </div>
+            
+            <div class="error" id="error"></div>
+            
+            <div class="results" id="results">
+                <div class="results-header">
+                    Files Generated Successfully!
+                </div>
+                <div class="results-body">
+                    <div class="download-section">
+                        <button class="download-btn" onclick="downloadFile('spaces')">
+                            Download with Spaces
+                        </button>
+                        <button class="download-btn" onclick="downloadFile('underscores')">
+                            Download with Underscores
+                        </button>
+                    </div>
+                    <p><strong>Two versions created:</strong> One with spaces (for some software) and one with underscores (for most phylogenetic software)</p>
+                    
+                    <div class="stats">
+                        <div class="stat-card">
+                            <div class="stat-number" id="totalSequences">0</div>
+                            <div class="stat-label">Total Sequences</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="matchedSequences">0</div>
+                            <div class="stat-label">Matched to Metadata</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="unmatchedSequences">0</div>
+                            <div class="stat-label">Unmatched</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Transform sequence identifiers into descriptive names for better phylogenetic tree interpretation</p>
+        </div>
+    </div>
+
+    <!-- Add SheetJS library for Excel reading -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+        let sequenceFile = null;
+        let metadataFile = null;
+        let processedData = {
+            spaces: null,
+            underscores: null
+        };
+        let stats = {};
+        
+        // File handling
+        const sequenceInput = document.getElementById('sequenceInput');
+        const metadataInput = document.getElementById('metadataInput');
+        const uploadSection = document.getElementById('uploadSection');
+        const processBtn = document.getElementById('processBtn');
+        
+        sequenceInput.addEventListener('change', handleSequenceSelect);
+        metadataInput.addEventListener('change', handleMetadataSelect);
+        
+        // Drag and drop
+        uploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadSection.classList.add('dragover');
+        });
+        
+        uploadSection.addEventListener('dragleave', () => {
+            uploadSection.classList.remove('dragover');
+        });
+        
+        uploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadSection.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.name.toLowerCase().match(/\.(fasta|fa|fas|tre|tree|nwk)$/)) {
+                    handleSequenceFile(file);
+                } else if (file.name.toLowerCase().match(/\.(xlsx|xls)$/)) {
+                    handleMetadataFile(file);
+                }
+            }
+        });
+        
+        function handleSequenceSelect(e) {
+            handleSequenceFile(e.target.files[0]);
+        }
+        
+        function handleMetadataSelect(e) {
+            handleMetadataFile(e.target.files[0]);
+        }
+        
+        function handleSequenceFile(file) {
+            if (!file) return;
+            
+            const validExtensions = /\.(fasta|fa|fas|tre|tree|nwk)$/i;
+            if (!validExtensions.test(file.name)) {
+                showError('Please select a FASTA (.fasta, .fa, .fas) or tree file (.tre, .tree, .nwk)');
+                return;
+            }
+            
+            sequenceFile = file;
+            const fileType = file.name.toLowerCase().match(/\.(tre|tree|nwk)$/) ? 'Tree file' : 'FASTA file';
+            
+            document.getElementById('sequenceName').textContent = file.name;
+            document.getElementById('sequenceType').textContent = fileType;
+            document.getElementById('sequenceSize').textContent = formatFileSize(file.size);
+            document.getElementById('sequenceInfo').style.display = 'block';
+            
+            checkReadyToProcess();
+            hideError();
+        }
+        
+        function handleMetadataFile(file) {
+            if (!file) return;
+            
+            if (!file.name.toLowerCase().match(/\.(xlsx|xls)$/)) {
+                showError('Please select an Excel file (.xlsx or .xls)');
+                return;
+            }
+            
+            metadataFile = file;
+            document.getElementById('metadataName').textContent = file.name;
+            document.getElementById('metadataSize').textContent = formatFileSize(file.size);
+            document.getElementById('metadataInfo').style.display = 'block';
+            
+            checkReadyToProcess();
+            hideError();
+        }
+        
+        function checkReadyToProcess() {
+            processBtn.disabled = !(sequenceFile && metadataFile);
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        async function processFiles() {
+            if (!sequenceFile || !metadataFile) return;
+            
+            showProgress();
+            updateProgress(10, 'Reading files...');
+            
+            try {
+                // Read metadata Excel file
+                const metadataContent = await readFileAsArrayBuffer(metadataFile);
+                const metadata = parseExcelMetadata(metadataContent);
+                updateProgress(30, 'Processing metadata...');
+                
+                // Read sequence file
+                const sequenceContent = await readFileAsText(sequenceFile);
+                updateProgress(50, 'Processing sequences...');
+                
+                // Determine file type and process accordingly
+                const isTreeFile = sequenceFile.name.toLowerCase().match(/\.(tre|tree|nwk)$/);
+                
+                let result;
+                if (isTreeFile) {
+                    result = processTreeFile(sequenceContent, metadata);
+                } else {
+                    result = processFastaFile(sequenceContent, metadata);
+                }
+                
+                updateProgress(80, 'Generating output files...');
+                
+                // Store processed data
+                processedData = result.files;
+                stats = result.stats;
+                
+                updateProgress(100, 'Complete!');
+                showResults();
+                
+            } catch (error) {
+                console.error('Error processing files:', error);
+                showError('Error processing files: ' + error.message);
+                hideProgress();
+            }
+        }
+        
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = e => reject(new Error('Failed to read file'));
+                reader.readAsText(file);
+            });
+        }
+        
+        function readFileAsArrayBuffer(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = e => reject(new Error('Failed to read file'));
+                reader.readAsArrayBuffer(file);
+            });
+        }
+        
+        function parseExcelMetadata(arrayBuffer) {
+            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+            
+            // Create lookup dictionary
+            const metadataDict = {};
+            
+            for (let row of jsonData) {
+                const genbankAcc = (row['GenBank Accession'] || '').toString().trim();
+                const fastaId = (row['Fasta ID'] || '').toString().trim();
+                
+                // Store by GenBank accession
+                if (genbankAcc) {
+                    const cleanAcc = genbankAcc.replace(' (local)', '').replace(' (unpublished)', '');
+                    metadataDict[cleanAcc] = row;
+                    metadataDict[cleanAcc.split('.')[0]] = row; // Without version
+                }
+                
+                // Store by FASTA ID
+                if (fastaId) {
+                    metadataDict[fastaId] = row;
+                    metadataDict[fastaId.split('.')[0]] = row; // Without version
+                }
+                
+                // Store by collection/voucher number
+                const collection = (row['Collection/Fungarium Number'] || '').toString().trim();
+                if (collection) {
+                    metadataDict[collection] = row;
+                    metadataDict[collection.replace(/[-\s]/g, '')] = row; // Without spaces/dashes
+                }
+            }
+            
+            return metadataDict;
+        }
+        
+        function processTreeFile(content, metadata) {
+            const originalContent = content;
+            let modifiedContentSpaces = content;
+            let modifiedContentUnderscores = content;
+            
+            let totalSequences = 0;
+            let matchedSequences = 0;
+            const processed = new Set();
+            
+            // Extract sequence identifiers from tree
+            const sequencePattern = /([A-Za-z0-9._\-]+)(?=:|,|\))/g;
+            const matches = [...content.matchAll(sequencePattern)];
+            
+            for (let match of matches) {
+                const seqId = match[1];
+                
+                // Skip if already processed or if it's clearly a number (branch length)
+                if (processed.has(seqId) || /^\d+\.?\d*$/.test(seqId)) continue;
+                
+                totalSequences++;
+                processed.add(seqId);
+                
+                // Try to find metadata
+                const metadataRow = findMetadata(seqId, metadata);
+                
+                if (metadataRow) {
+                    matchedSequences++;
+                    const newName = createTreeName(metadataRow);
+                    
+                    if (newName) {
+                        // Create regex to match this exact sequence ID
+                        const escapeRegex = seqId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const regex = new RegExp(`\\b${escapeRegex}\\b`, 'g');
+                        
+                        // Replace in both versions
+                        const nameWithSpaces = newName.replace(/_/g, ' ');
+                        const nameWithUnderscores = newName.replace(/\s/g, '_');
+                        
+                        modifiedContentSpaces = modifiedContentSpaces.replace(regex, nameWithSpaces);
+                        modifiedContentUnderscores = modifiedContentUnderscores.replace(regex, nameWithUnderscores);
+                    }
+                }
+            }
+            
+            return {
+                files: {
+                    spaces: modifiedContentSpaces,
+                    underscores: modifiedContentUnderscores
+                },
+                stats: {
+                    total: totalSequences,
+                    matched: matchedSequences,
+                    unmatched: totalSequences - matchedSequences
+                }
+            };
+        }
+        
+        function processFastaFile(content, metadata) {
+            const sequences = parseFastaContent(content);
+            let spacesContent = '';
+            let underscoresContent = '';
+            
+            let matchedSequences = 0;
+            
+            for (let seq of sequences) {
+                const metadataRow = findMetadata(seq.id, metadata);
+                
+                if (metadataRow) {
+                    matchedSequences++;
+                    const newName = createTreeName(metadataRow);
+                    
+                    if (newName) {
+                        const nameWithSpaces = newName.replace(/_/g, ' ');
+                        const nameWithUnderscores = newName.replace(/\s/g, '_');
+                        
+                        spacesContent += `>${nameWithSpaces}\n${seq.sequence}\n`;
+                        underscoresContent += `>${nameWithUnderscores}\n${seq.sequence}\n`;
+                    } else {
+                        spacesContent += `>${seq.id}\n${seq.sequence}\n`;
+                        underscoresContent += `>${seq.id}\n${seq.sequence}\n`;
+                    }
+                } else {
+                    spacesContent += `>${seq.id}\n${seq.sequence}\n`;
+                    underscoresContent += `>${seq.id}\n${seq.sequence}\n`;
+                }
+            }
+            
+            return {
+                files: {
+                    spaces: spacesContent,
+                    underscores: underscoresContent
+                },
+                stats: {
+                    total: sequences.length,
+                    matched: matchedSequences,
+                    unmatched: sequences.length - matchedSequences
+                }
+            };
+        }
+        
+        function parseFastaContent(content) {
+            const sequences = [];
+            const lines = content.split('\n');
+            let currentSeq = null;
+            
+            for (let line of lines) {
+                line = line.trim();
+                if (line.startsWith('>')) {
+                    if (currentSeq) {
+                        sequences.push(currentSeq);
+                    }
+                    const header = line.substring(1).trim();
+                    const id = header.split(/\s+/)[0];
+                    currentSeq = {
+                        id: id,
+                        sequence: ''
+                    };
+                } else if (line && currentSeq) {
+                    currentSeq.sequence += line;
+                }
+            }
+            
+            if (currentSeq) {
+                sequences.push(currentSeq);
+            }
+            
+            return sequences;
+        }
+        
+        function findMetadata(seqId, metadata) {
+            // Try different matching strategies
+            const searchKeys = [
+                seqId,
+                seqId.split('.')[0], // Without version
+                seqId.replace(/[-_]/g, ''), // Without dashes/underscores
+                seqId.split('_')[0], // First part before underscore
+                seqId.replace(/[^A-Za-z0-9]/g, '') // Only alphanumeric
+            ];
+            
+            for (let key of searchKeys) {
+                if (metadata[key]) {
+                    return metadata[key];
+                }
+            }
+            
+            // Try partial matching
+            for (let [storedKey, metadataRow] of Object.entries(metadata)) {
+                if (seqId.includes(storedKey) || storedKey.includes(seqId)) {
+                    return metadataRow;
+                }
+            }
+            
+            return null;
+        }
+        
+        function createTreeName(metadata) {
+            const nameParts = [];
+            
+            // 1. GenBank Accession
+            const genbankAcc = (metadata['GenBank Accession'] || '').toString().trim();
+            if (genbankAcc && genbankAcc !== 'Unpublished' && genbankAcc !== 'Not found') {
+                const cleanAcc = genbankAcc.replace(' (local)', '').replace(' (unpublished)', '');
+                nameParts.push(cleanText(cleanAcc));
+            }
+            
+            // 2. Species Name
+            const speciesName = (metadata['Species Name'] || '').toString().trim();
+            if (speciesName && speciesName !== 'Unknown') {
+                nameParts.push(cleanText(speciesName));
+            }
+            
+            // 3. Location simplified
+            const location = (metadata['Location simplified'] || '').toString().trim();
+            if (location) {
+                nameParts.push(cleanText(location));
+            }
+            
+            // 4. Type status
+            const typeStatus = (metadata['Type status'] || '').toString().trim();
+            if (typeStatus) {
+                nameParts.push(cleanText(typeStatus));
+            }
+            
+            return nameParts.filter(Boolean).join('_');
+        }
+        
+        function cleanText(text) {
+            if (!text) return '';
+            // Remove special characters, keep only alphanumeric, spaces, hyphens, underscores
+            let cleaned = text.replace(/[^a-zA-Z0-9\s_\-]/g, ' ');
+            // Replace multiple spaces with single space
+            cleaned = cleaned.replace(/\s+/g, ' ').trim();
+            return cleaned;
+        }
+        
+        function downloadFile(version) {
+            if (!processedData[version]) return;
+            
+            const content = processedData[version];
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            
+            // Generate filename
+            const baseName = sequenceFile.name.replace(/\.[^/.]+$/, '');
+            const extension = sequenceFile.name.toLowerCase().match(/\.(tre|tree|nwk)$/) ? '.tre' : '.fasta';
+            const filename = `${baseName}_tree_${version}${extension}`;
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+        
+        function showProgress() {
+            document.getElementById('progress').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            hideError();
+        }
+        
+        function updateProgress(percent, status) {
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('status').textContent = status;
+        }
+        
+        function hideProgress() {
+            document.getElementById('progress').style.display = 'none';
+        }
+        
+        function showResults() {
+            hideProgress();
+            document.getElementById('results').style.display = 'block';
+            
+            // Update stats
+            document.getElementById('totalSequences').textContent = stats.total;
+            document.getElementById('matchedSequences').textContent = stats.matched;
+            document.getElementById('unmatchedSequences').textContent = stats.unmatched;
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
