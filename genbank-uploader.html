@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GenBank Source Modifier Generator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #2c3e50;
+      text-align: center;
+      margin-bottom: 0.5rem;
+    }
+    .subtitle {
+      text-align: center;
+      color: #7f8c8d;
+      margin-bottom: 2rem;
+    }
+    .section {
+      background: #f8f9fa;
+      border: 2px solid #dee2e6;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .section h2 {
+      margin-top: 0;
+      color: #495057;
+      font-size: 1.2rem;
+    }
+    .file-input-group {
+      margin-bottom: 1rem;
+    }
+    label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+      color: #495057;
+    }
+    input[type="file"] {
+      display: block;
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      background: white;
+    }
+    .checkbox-group {
+      margin: 1rem 0;
+    }
+    .checkbox-group label {
+      display: inline;
+      font-weight: normal;
+      margin-left: 0.5rem;
+    }
+    button {
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      width: 100%;
+      font-weight: bold;
+    }
+    button:hover {
+      background: #218838;
+    }
+    button:disabled {
+      background: #6c757d;
+      cursor: not-allowed;
+    }
+    #status {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+    }
+    .info {
+      background: #d1ecf1;
+      border-left: 4px solid #17a2b8;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      border-radius: 4px;
+    }
+    .error {
+      background: #f8d7da;
+      border-left: 4px solid #dc3545;
+      color: #721c24;
+    }
+    .success {
+      background: #d4edda;
+      border-left: 4px solid #28a745;
+      color: #155724;
+    }
+    .warning {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      color: #856404;
+    }
+  </style>
+</head>
+<body>
+  <h1>GenBank Source Modifier Generator</h1>
+  <p class="subtitle">Convert FLAS metadata + FASTA to GenBank format</p>
+
+  <div class="info">
+    <strong>How it works:</strong>
+    <ol>
+      <li>Upload your FLAS metadata spreadsheet (CSV or Excel)</li>
+      <li>Upload your FASTA file containing sequences</li>
+      <li>Tool matches FLAS numbers from FASTA headers to metadata</li>
+      <li>Download tab-delimited GenBank source modifier file</li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h2>Step 1: Upload FLAS Metadata</h2>
+    <div class="file-input-group">
+      <label for="metadataFile">FLAS Metadata Spreadsheet (CSV or XLSX):</label>
+      <input type="file" id="metadataFile" accept=".csv,.xlsx,.xls">
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Step 2: Upload FASTA File</h2>
+    <div class="file-input-group">
+      <label for="fastaFile">FASTA File (.fasta, .fa, .fna, .txt):</label>
+      <input type="file" id="fastaFile" accept=".fasta,.fa,.fna,.txt">
+    </div>
+    <div class="checkbox-group">
+      <input type="checkbox" id="useAllSpecimens">
+      <label for="useAllSpecimens">Use all specimens from metadata (ignore FASTA matching)</label>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Step 3: Generate GenBank File</h2>
+    <button id="generateBtn" disabled>Generate GenBank Source Modifier File</button>
+    <div id="status"></div>
+  </div>
+
+  <script>
+    let metadataData = null;
+    let fastaData = null;
+
+    const metadataInput = document.getElementById('metadataFile');
+    const fastaInput = document.getElementById('fastaFile');
+    const generateBtn = document.getElementById('generateBtn');
+    const statusDiv = document.getElementById('status');
+    const useAllCheckbox = document.getElementById('useAllSpecimens');
+
+    metadataInput.addEventListener('change', handleMetadataUpload);
+    fastaInput.addEventListener('change', handleFastaUpload);
+    generateBtn.addEventListener('click', generateGenBankFile);
+
+    function updateButtonState() {
+      const fastaRequired = !useAllCheckbox.checked;
+      generateBtn.disabled = !metadataData || (fastaRequired && !fastaData);
+    }
+
+    useAllCheckbox.addEventListener('change', updateButtonState);
+
+    async function handleMetadataUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      statusDiv.textContent = 'Loading metadata...';
+      statusDiv.className = '';
+
+      try {
+        const fileExtension = file.name.split('.').pop().toLowerCase();
+        
+        if (fileExtension === 'csv') {
+          const text = await file.text();
+          const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+          metadataData = parsed.data;
+        } else if (['xlsx', 'xls'].includes(fileExtension)) {
+          const arrayBuffer = await file.arrayBuffer();
+          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          metadataData = XLSX.utils.sheet_to_json(firstSheet);
+        }
+
+        statusDiv.textContent = `✓ Loaded ${metadataData.length} specimens from metadata`;
+        statusDiv.className = 'success';
+        updateButtonState();
+      } catch (error) {
+        statusDiv.textContent = `Error loading metadata: ${error.message}`;
+        statusDiv.className = 'error';
+        metadataData = null;
+        updateButtonState();
+      }
+    }
+
+    async function handleFastaUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      statusDiv.textContent = 'Loading FASTA file...';
+      statusDiv.className = '';
+
+      try {
+        const text = await file.text();
+        fastaData = parseFasta(text);
+        statusDiv.textContent = `✓ Loaded ${fastaData.length} sequences from FASTA`;
+        statusDiv.className = 'success';
+        updateButtonState();
+      } catch (error) {
+        statusDiv.textContent = `Error loading FASTA: ${error.message}`;
+        statusDiv.className = 'error';
+        fastaData = null;
+        updateButtonState();
+      }
+    }
+
+    function parseFasta(text) {
+      const sequences = [];
+      const lines = text.split('\n');
+      let currentHeader = null;
+      let currentSeq = '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('>')) {
+          if (currentHeader) {
+            sequences.push({ header: currentHeader, sequence: currentSeq });
+          }
+          currentHeader = trimmed.substring(1);
+          currentSeq = '';
+        } else if (trimmed) {
+          currentSeq += trimmed;
+        }
+      }
+
+      if (currentHeader) {
+        sequences.push({ header: currentHeader, sequence: currentSeq });
+      }
+
+      return sequences;
+    }
+
+    function extractFLASNumber(header) {
+      // Try multiple patterns to find FLAS number
+      const patterns = [
+        /FLAS[_-]F[_-]\d+/i,
+        /FLAS[_-]\d+/i,
+        /F[_-]\d+/i,
+        /\d{5,}/
+      ];
+
+      for (const pattern of patterns) {
+        const match = header.match(pattern);
+        if (match) {
+          return match[0].toUpperCase().replace(/_/g, '-');
+        }
+      }
+      return null;
+    }
+
+    function findMetadataByFLAS(flasNumber, catalogNumber) {
+      if (!metadataData) return null;
+
+      // Normalize the search term
+      const normalized = flasNumber.toUpperCase().replace(/[_-]/g, '');
+      
+      for (const row of metadataData) {
+        // Check multiple possible column names
+        const checkFields = [
+          row['catalognumber'],
+          row['OtherCatalogNumbers'],
+          row['recordNumber'],
+          row['Catalog Number'],
+          row['catalog_number']
+        ].filter(Boolean);
+
+        for (const field of checkFields) {
+          const fieldNormalized = String(field).toUpperCase().replace(/[_-]/g, '');
+          if (fieldNormalized.includes(normalized) || normalized.includes(fieldNormalized)) {
+            return row;
+          }
+        }
+      }
+      return null;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      
+      // Try to parse various date formats
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = months[date.getMonth()];
+      const year = date.getFullYear();
+
+      return `${day}-${month}-${year}`;
+    }
+
+    function formatAltitude(elevation) {
+      if (!elevation) return '';
+      const num = String(elevation).replace(/[^\d.-]/g, '');
+      return num ? `${num} m` : '';
+    }
+
+    function formatGeoLocation(country, state, county) {
+      if (!country) country = 'USA';
+      const parts = [country];
+      if (state) parts.push(state);
+      if (county) parts.push(county);
+      
+      if (parts.length === 1) return country;
+      return `${parts[0]}: ${parts.slice(1).join(', ')}`;
+    }
+
+    function formatLatLon(lat, lon) {
+      if (!lat || !lon) return '';
+      return `${lat} ${lon}`;
+    }
+
+    function generateGenBankFile() {
+      statusDiv.textContent = 'Generating GenBank file...';
+      statusDiv.className = '';
+
+      try {
+        const useAll = useAllCheckbox.checked;
+        let records = [];
+
+        if (useAll) {
+          // Use all specimens from metadata
+          records = metadataData.map((row, index) => {
+            const seqId = row['catalognumber'] || row['OtherCatalogNumbers'] || `Specimen_${index + 1}`;
+            return createGenBankRecord(seqId, row, null);
+          });
+        } else {
+          // Match FASTA sequences to metadata
+          const matched = [];
+          const unmatched = [];
+
+          for (const seq of fastaData) {
+            const flasNumber = extractFLASNumber(seq.header);
+            if (!flasNumber) {
+              unmatched.push(seq.header);
+              continue;
+            }
+
+            const metadata = findMetadataByFLAS(flasNumber, seq.header);
+            if (metadata) {
+              // Use the EXACT FASTA header as Sequence_ID
+              records.push(createGenBankRecord(seq.header, metadata, flasNumber));
+              matched.push(flasNumber);
+            } else {
+              unmatched.push(flasNumber);
+            }
+          }
+
+          if (unmatched.length > 0) {
+            statusDiv.textContent = `Warning: ${unmatched.length} sequences could not be matched:\n${unmatched.join(', ')}`;
+            statusDiv.className = 'warning';
+          }
+        }
+
+        if (records.length === 0) {
+          statusDiv.textContent = 'Error: No records generated. Check that FLAS numbers in FASTA match metadata.';
+          statusDiv.className = 'error';
+          return;
+        }
+
+        // Generate TSV file
+        const headers = ['Sequence_ID', 'Organism', 'collection-date', 'geo_loc_name', 
+                        'specimen-voucher', 'altitude', 'collected-by', 'host', 
+                        'isolation-source', 'latitude-longitude', 'note'];
+        
+        const rows = [headers.join('\t')];
+        for (const record of records) {
+          const row = headers.map(h => record[h] || '').join('\t');
+          rows.push(row);
+        }
+
+        const tsvContent = rows.join('\n');
+        downloadFile(tsvContent, 'genbank_source_modifiers.txt');
+
+        statusDiv.textContent = `✓ Success! Generated ${records.length} records.\nFile downloaded as genbank_source_modifiers.txt`;
+        statusDiv.className = 'success';
+
+      } catch (error) {
+        statusDiv.textContent = `Error: ${error.message}`;
+        statusDiv.className = 'error';
+      }
+    }
+
+    function createGenBankRecord(sequenceId, metadata, flasNumber) {
+      // Extract FLAS number for specimen-voucher
+      let specimenVoucher = '';
+      if (flasNumber) {
+        specimenVoucher = flasNumber;
+      } else {
+        // If no FLAS number provided, try to extract from catalog fields
+        specimenVoucher = metadata['catalognumber'] || '';
+        if (!specimenVoucher && metadata['OtherCatalogNumbers']) {
+          const match = metadata['OtherCatalogNumbers'].match(/FLAS[_-]F[_-]\d+/i);
+          if (match) specimenVoucher = match[0];
+        }
+      }
+
+      // Build notes: combine iNaturalist number and occurrence remarks
+      let notes = [];
+      if (metadata['OtherCatalogNumbers'] && metadata['OtherCatalogNumbers'].includes('iNaturalist')) {
+        notes.push(metadata['OtherCatalogNumbers']);
+      }
+      if (metadata['occurrenceremarks']) {
+        notes.push(metadata['occurrenceremarks']);
+      }
+
+      const record = {
+        'Sequence_ID': sequenceId,
+        'Organism': metadata['scientificName'] || '',
+        'collection-date': formatDate(metadata['verbatimeventdate'] || 
+                                      `${metadata['year']}-${metadata['month']}-${metadata['day']}`),
+        'geo_loc_name': formatGeoLocation(metadata['Country'], metadata['stateprovince'], metadata['County']),
+        'specimen-voucher': specimenVoucher,
+        'altitude': formatAltitude(metadata['Elevation']),
+        'collected-by': metadata['recordedBy'] || '',
+        'host': metadata['Host'] || '',
+        'isolation-source': metadata['Substrate'] || metadata['Habitat'] || '',
+        'latitude-longitude': formatLatLon(metadata['decimalLatitude'], metadata['decimalLongitude']),
+        'note': notes.join('; ')
+      };
+
+      return record;
+    }
+
+    function downloadFile(content, filename) {
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
