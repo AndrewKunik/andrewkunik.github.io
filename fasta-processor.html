@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FASTA File Processor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .mode-btn:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .mode-btn.active {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+        }
+
+        .drop-zone {
+            border: 3px dashed #ccc;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+            background: #fafafa;
+        }
+
+        .drop-zone.dragover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .drop-zone input {
+            display: none;
+        }
+
+        .drop-zone-text {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .drop-zone-subtext {
+            color: #999;
+            font-size: 14px;
+        }
+
+        .file-list {
+            margin-bottom: 20px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .file-name {
+            color: #333;
+            font-size: 14px;
+        }
+
+        .remove-btn {
+            background: #ff4757;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .remove-btn:hover {
+            background: #ff3838;
+        }
+
+        .options {
+            margin-bottom: 20px;
+        }
+
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .checkbox-wrapper input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .checkbox-wrapper label {
+            color: #333;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .radio-group {
+            margin-left: 30px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .radio-option:last-child {
+            margin-bottom: 0;
+        }
+
+        .radio-option input[type="radio"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .radio-option label {
+            color: #555;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .process-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .process-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .process-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f0f9ff;
+            border-radius: 8px;
+            border: 1px solid #bfdbfe;
+        }
+
+        .results h3 {
+            color: #1e40af;
+            margin-bottom: 10px;
+        }
+
+        .results p {
+            color: #1e3a8a;
+            margin-bottom: 8px;
+        }
+
+        .download-btn {
+            margin-top: 15px;
+            padding: 12px 24px;
+            background: #10b981;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .download-btn:hover {
+            background: #059669;
+        }
+
+        .error {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fee;
+            border: 1px solid #fcc;
+            border-radius: 8px;
+            color: #c33;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>FASTA File Processor</h1>
+        <p class="subtitle">Merge and deduplicate FASTA files easily</p>
+
+        <div class="mode-selector">
+            <button class="mode-btn active" data-mode="single">Deduplicate Single File</button>
+            <button class="mode-btn" data-mode="merge">Merge Multiple Files</button>
+        </div>
+
+        <div class="drop-zone" id="dropZone">
+            <div class="drop-zone-text">Drop your FASTA file(s) here</div>
+            <div class="drop-zone-subtext">or click to browse</div>
+            <input type="file" id="fileInput" accept=".fasta,.fa,.fna,.txt" multiple>
+        </div>
+
+        <div class="file-list hidden" id="fileList"></div>
+
+        <div class="options">
+            <div class="checkbox-wrapper" id="deduplicateWrapper">
+                <input type="checkbox" id="deduplicateCheck" checked>
+                <label for="deduplicateCheck">Remove duplicate sequences</label>
+            </div>
+
+            <div class="radio-group" id="deduplicationMethod">
+                <div class="radio-option">
+                    <input type="radio" id="accessionMethod" name="dedupMethod" value="accession" checked>
+                    <label for="accessionMethod">By GenBank accession number (first word after >)</label>
+                </div>
+                <div class="radio-option">
+                    <input type="radio" id="fullLabelMethod" name="dedupMethod" value="fullLabel">
+                    <label for="fullLabelMethod">By full header line (exact match)</label>
+                </div>
+            </div>
+        </div>
+
+        <button class="process-btn" id="processBtn" disabled>Process Files</button>
+
+        <div class="results hidden" id="results"></div>
+        <div class="error hidden" id="error"></div>
+    </div>
+
+    <script>
+        let files = [];
+        let mode = 'single';
+        let processedData = null;
+
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const processBtn = document.getElementById('processBtn');
+        const results = document.getElementById('results');
+        const error = document.getElementById('error');
+        const deduplicateCheck = document.getElementById('deduplicateCheck');
+        const deduplicateWrapper = document.getElementById('deduplicateWrapper');
+        const deduplicationMethod = document.getElementById('deduplicationMethod');
+        const modeBtns = document.querySelectorAll('.mode-btn');
+
+        // Mode switching
+        modeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                modeBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                mode = btn.dataset.mode;
+                files = [];
+                updateUI();
+            });
+        });
+
+        // Drag and drop
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        function handleFiles(newFiles) {
+            if (mode === 'single' && files.length > 0) {
+                files = [];
+            }
+            
+            for (let file of newFiles) {
+                if (mode === 'single' && files.length >= 1) break;
+                files.push(file);
+            }
+            
+            updateUI();
+        }
+
+        function updateUI() {
+            if (mode === 'single') {
+                fileInput.removeAttribute('multiple');
+                deduplicateWrapper.style.display = 'flex';
+                deduplicateCheck.checked = true;
+            } else {
+                fileInput.setAttribute('multiple', 'multiple');
+                deduplicateWrapper.style.display = 'flex';
+            }
+
+            if (files.length > 0) {
+                fileList.classList.remove('hidden');
+                fileList.innerHTML = files.map((file, index) => `
+                    <div class="file-item">
+                        <span class="file-name">${file.name}</span>
+                        <button class="remove-btn" onclick="removeFile(${index})">Remove</button>
+                    </div>
+                `).join('');
+                processBtn.disabled = false;
+            } else {
+                fileList.classList.add('hidden');
+                processBtn.disabled = true;
+            }
+
+            results.classList.add('hidden');
+            error.classList.add('hidden');
+        }
+
+        function removeFile(index) {
+            files.splice(index, 1);
+            updateUI();
+        }
+
+        deduplicateCheck.addEventListener('change', () => {
+            deduplicationMethod.style.display = deduplicateCheck.checked ? 'block' : 'none';
+        });
+
+        processBtn.addEventListener('click', async () => {
+            try {
+                error.classList.add('hidden');
+                results.classList.add('hidden');
+                
+                let allSequences = [];
+                
+                for (let file of files) {
+                    const text = await file.text();
+                    const sequences = parseFasta(text);
+                    allSequences = allSequences.concat(sequences);
+                }
+
+                let finalSequences = allSequences;
+                let duplicatesRemoved = 0;
+
+                if (deduplicateCheck.checked) {
+                    const method = document.querySelector('input[name="dedupMethod"]:checked').value;
+                    const result = deduplicate(allSequences, method);
+                    finalSequences = result.sequences;
+                    duplicatesRemoved = result.duplicatesRemoved;
+                }
+
+                const output = formatFasta(finalSequences);
+                processedData = { output, filename: getOutputFilename() };
+
+                displayResults(allSequences.length, finalSequences.length, duplicatesRemoved);
+            } catch (err) {
+                showError(err.message);
+            }
+        });
+
+        function parseFasta(text) {
+            const sequences = [];
+            const lines = text.split('\n');
+            let currentHeader = null;
+            let currentSequence = [];
+
+            for (let line of lines) {
+                line = line.trim();
+                if (line.startsWith('>')) {
+                    if (currentHeader !== null) {
+                        sequences.push({
+                            header: currentHeader,
+                            sequence: currentSequence.join('')
+                        });
+                    }
+                    currentHeader = line;
+                    currentSequence = [];
+                } else if (line.length > 0) {
+                    currentSequence.push(line);
+                }
+            }
+
+            if (currentHeader !== null) {
+                sequences.push({
+                    header: currentHeader,
+                    sequence: currentSequence.join('')
+                });
+            }
+
+            return sequences;
+        }
+
+        function deduplicate(sequences, method) {
+            const seen = new Set();
+            const deduplicated = [];
+            let duplicatesRemoved = 0;
+
+            for (let seq of sequences) {
+                let key;
+                
+                if (method === 'accession') {
+                    const match = seq.header.match(/^>(\S+)/);
+                    key = match ? match[1] : seq.header;
+                } else {
+                    key = seq.header;
+                }
+
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    deduplicated.push(seq);
+                } else {
+                    duplicatesRemoved++;
+                }
+            }
+
+            return { sequences: deduplicated, duplicatesRemoved };
+        }
+
+        function formatFasta(sequences) {
+            return sequences.map(seq => `${seq.header}\n${seq.sequence}`).join('\n');
+        }
+
+        function getOutputFilename() {
+            if (mode === 'single') {
+                return files[0].name.replace(/\.(fasta|fa|fna|txt)$/i, '_deduplicated.fasta');
+            } else {
+                return 'merged_sequences.fasta';
+            }
+        }
+
+        function displayResults(originalCount, finalCount, duplicatesRemoved) {
+            results.innerHTML = `
+                <h3>Processing Complete!</h3>
+                <p><strong>Original sequences:</strong> ${originalCount}</p>
+                <p><strong>Final sequences:</strong> ${finalCount}</p>
+                ${duplicatesRemoved > 0 ? `<p><strong>Duplicates removed:</strong> ${duplicatesRemoved}</p>` : ''}
+                <button class="download-btn" onclick="downloadFile()">Download FASTA File</button>
+            `;
+            results.classList.remove('hidden');
+        }
+
+        function downloadFile() {
+            if (!processedData || !processedData.output) {
+                showError('No processed data available to download');
+                return;
+            }
+            
+            try {
+                const blob = new Blob([processedData.output], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = processedData.filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 100);
+            } catch (err) {
+                showError('Download failed: ' + err.message);
+            }
+        }
+
+        function showError(message) {
+            error.textContent = `Error: ${message}`;
+            error.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
