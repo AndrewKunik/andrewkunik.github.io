@@ -473,7 +473,29 @@
       if (!dateStr || dateStr === 'undefined' || dateStr === 'null') return '';
       
       // Convert to string and trim
-      dateStr = String(dateStr).trim();
+      let dateVal = dateStr;
+      
+      // Check if it's an Excel serial date number (number between ~1 and ~60000)
+      // Excel serial dates: 1 = Jan 1, 1900, 44819 = Sept 15, 2022
+      if (typeof dateVal === 'number' || /^\d+$/.test(String(dateVal).trim())) {
+        const serialNum = Number(dateVal);
+        if (serialNum > 1 && serialNum < 100000) {
+          // Convert Excel serial date to JavaScript Date
+          // Excel's epoch is Dec 30, 1899 (accounting for the 1900 leap year bug)
+          const excelEpoch = new Date(1899, 11, 30);
+          const jsDate = new Date(excelEpoch.getTime() + serialNum * 24 * 60 * 60 * 1000);
+          
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const day = String(jsDate.getDate()).padStart(2, '0');
+          const month = months[jsDate.getMonth()];
+          const year = jsDate.getFullYear();
+          
+          return `${day}-${month}-${year}`;
+        }
+      }
+      
+      dateStr = String(dateVal).trim();
       if (!dateStr || dateStr === 'NaN' || dateStr === 'undefined-undefined-undefined') return '';
       
       // If it's already in a good format like "15-Jun-2023", return as-is
