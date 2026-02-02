@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GenBank Source Modifier Generator</title>
+  <title>GenBank Source Modifier Generator v2</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
   <style>
@@ -109,10 +109,15 @@
       border-left: 4px solid #ffc107;
       color: #856404;
     }
+    .match-log {
+      font-size: 0.85rem;
+      max-height: 300px;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
-  <h1>GenBank Source Modifier Generator</h1>
+  <h1>GenBank Source Modifier Generator v2</h1>
   <p class="subtitle">Convert FLAS metadata + FASTA to GenBank format</p>
 
   <div class="info">
@@ -120,7 +125,13 @@
     <ol>
       <li>Upload your FLAS metadata spreadsheet (CSV or Excel)</li>
       <li>Upload your FASTA file containing sequences</li>
-      <li>Tool matches FLAS numbers from FASTA headers to metadata</li>
+      <li>Tool matches sequences to metadata using:
+        <ul>
+          <li>FLAS numbers (e.g., FLAS-F-73131)</li>
+          <li>iNaturalist numbers from <code>OtherCatalogNumbers</code></li>
+          <li>Personal collection numbers from <code>recordNumber</code> (e.g., T22, KUNIK191)</li>
+        </ul>
+      </li>
       <li>Download tab-delimited GenBank source modifier file</li>
     </ol>
   </div>
@@ -129,7 +140,7 @@
     <h2>Step 1: Upload FLAS Metadata</h2>
     <div class="file-input-group">
       <label for="metadataFile">FLAS Metadata Spreadsheet (CSV or XLSX):</label>
-      <input type="file" id="metadataFile" accept=".csv,.xlsx,.xls">
+      <input type="file" id="metadataFile" accept=".csv,.xlsx,.xls,.tsv,.txt">
     </div>
   </div>
 
@@ -186,11 +197,20 @@
           const text = await file.text();
           const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
           metadataData = parsed.data;
+        } else if (fileExtension === 'tsv' || fileExtension === 'txt') {
+          const text = await file.text();
+          const parsed = Papa.parse(text, { header: true, skipEmptyLines: true, delimiter: '\t' });
+          metadataData = parsed.data;
         } else if (['xlsx', 'xls'].includes(fileExtension)) {
           const arrayBuffer = await file.arrayBuffer();
           const workbook = XLSX.read(arrayBuffer, { type: 'array' });
           const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
           metadataData = XLSX.utils.sheet_to_json(firstSheet);
+        }
+
+        // Log column names for debugging
+        if (metadataData && metadataData.length > 0) {
+          console.log('Metadata columns:', Object.keys(metadataData[0]));
         }
 
         statusDiv.textContent = `✓ Loaded ${metadataData.length} specimens from metadata`;
@@ -251,47 +271,201 @@
       return sequences;
     }
 
-    function extractFLASNumber(header) {
-      // Try multiple patterns to find FLAS number
-      const patterns = [
-        /FLAS[_-]F[_-]\d+/i,
-        /FLAS[_-]\d+/i,
-        /F[_-]\d+/i,
-        /\d{5,}/
-      ];
+    function extractIdentifiers(header) {
+      // Returns an object with all possible identifiers found in the header
+      const identifiers = {
+        flas: null,
+        inat: null,
+        recordNum: null,
+        allNumbers: [],
+        allAlphaNum: [],
+        lastPart: null,  // For ONT-style headers where ID is after last hyphen
+        primaryId: null, // The main identifier we think this is
+        raw: header.trim()
+      };
 
-      for (const pattern of patterns) {
+      // FIRST: Check for FLAS number anywhere in the header (highest priority)
+      const flasPatterns = [
+        /FLAS[_\-]?F[_\-]?\d+/i,
+        /FLAS[_\-]?\d+/i
+      ];
+      for (const pattern of flasPatterns) {
         const match = header.match(pattern);
         if (match) {
-          return match[0].toUpperCase().replace(/_/g, '-');
+          identifiers.flas = match[0].toUpperCase().replace(/_/g, '-');
+          identifiers.primaryId = identifiers.flas;
+          break;
         }
       }
-      return null;
+
+      // Check for ONT-style header format: ONT##.##-[well]-[identifier]
+      // e.g., "ONT01.17-A03-KUNIK512" -> extract "KUNIK512"
+      // e.g., "ONT01.17-A03-FLAS-F-73131" -> extract "FLAS-F-73131"
+      const ontMatch = header.match(/^ONT\d+\.\d+-[A-H]\d+-(.+)$/i);
+      if (ontMatch) {
+        identifiers.lastPart = ontMatch[1].trim();
+        
+        // If lastPart contains a FLAS number, extract it properly
+        if (!identifiers.flas && /FLAS/i.test(identifiers.lastPart)) {
+          for (const pattern of flasPatterns) {
+            const flasMatch = identifiers.lastPart.match(pattern);
+            if (flasMatch) {
+              identifiers.flas = flasMatch[0].toUpperCase().replace(/_/g, '-');
+              identifiers.primaryId = identifiers.flas;
+              break;
+            }
+          }
+        }
+        
+        // If no FLAS found, use lastPart as primaryId
+        if (!identifiers.primaryId) {
+          identifiers.primaryId = identifiers.lastPart;
+        }
+      } else if (!identifiers.primaryId) {
+        // SIMPLE FORMAT: The identifier is the whole header (or first part before space/underscore)
+        // e.g., ">KUNIK512" or ">246162333" or ">KUNIK512_something"
+        const simpleMatch = header.match(/^([A-Za-z0-9\.\-]+)/);
+        if (simpleMatch) {
+          identifiers.primaryId = simpleMatch[1].trim();
+          identifiers.lastPart = identifiers.primaryId;
+        }
+      }
+
+      // Check if primaryId is a pure number (7+ digits = likely iNat)
+      if (identifiers.primaryId && /^\d{7,10}$/.test(identifiers.primaryId)) {
+        identifiers.inat = identifiers.primaryId;
+        identifiers.allNumbers.push(identifiers.primaryId);
+      }
+      
+      // Also extract any other long numbers from the header
+      const numberMatches = header.match(/\b(\d{7,10})\b/g);
+      if (numberMatches) {
+        for (const num of numberMatches) {
+          if (!identifiers.allNumbers.includes(num)) {
+            identifiers.allNumbers.push(num);
+          }
+        }
+        if (!identifiers.inat) {
+          identifiers.inat = numberMatches[0];
+        }
+      }
+
+      // Check if primaryId looks like a record number (alphanumeric like KUNIK512, T22, JC1)
+      // But not if it's a FLAS number
+      if (identifiers.primaryId && !identifiers.flas) {
+        if (/^[A-Za-z]+\d+/i.test(identifiers.primaryId)) {
+          identifiers.recordNum = identifiers.primaryId.toUpperCase();
+        }
+        // Also handle lowercase codes like "t2", "t22" 
+        if (/^[A-Za-z]\d+$/i.test(identifiers.primaryId)) {
+          identifiers.recordNum = identifiers.primaryId.toUpperCase();
+        }
+      }
+
+      // Extract all alphanumeric codes from header as backup
+      const alphaNumMatches = header.match(/\b([A-Z]+\d+[\.\dA-Z]*|\d+[A-Z]+[A-Z0-9]*)\b/gi);
+      if (alphaNumMatches) {
+        identifiers.allAlphaNum = alphaNumMatches
+          .filter(m => !m.match(/^FLAS/i) && !m.match(/^ONT/i) && !m.match(/^[A-H]\d+$/i))
+          .map(m => m.toUpperCase());
+      }
+      
+      // If we still don't have a recordNum, use first alphanumeric match
+      if (!identifiers.recordNum && identifiers.allAlphaNum.length > 0) {
+        identifiers.recordNum = identifiers.allAlphaNum[0];
+      }
+
+      return identifiers;
     }
 
-    function findMetadataByFLAS(flasNumber, catalogNumber) {
+    function findMetadataMatch(identifiers) {
       if (!metadataData) return null;
 
-      // Normalize the search term
-      const normalized = flasNumber.toUpperCase().replace(/[_-]/g, '');
-      
       for (const row of metadataData) {
-        // Check multiple possible column names
-        const checkFields = [
-          row['catalognumber'],
-          row['OtherCatalogNumbers'],
-          row['recordNumber'],
-          row['Catalog Number'],
-          row['catalog_number']
-        ].filter(Boolean);
+        // 1. Try matching by FLAS number (catalognumber)
+        if (identifiers.flas) {
+          const catalogNum = String(row['catalognumber'] || '').toUpperCase().replace(/[_\-\s]/g, '');
+          const flasNorm = identifiers.flas.replace(/[_\-\s]/g, '');
+          if (catalogNum && catalogNum.includes(flasNorm)) {
+            return { row, matchedBy: 'FLAS', matchedValue: identifiers.flas };
+          }
+        }
 
-        for (const field of checkFields) {
-          const fieldNormalized = String(field).toUpperCase().replace(/[_-]/g, '');
-          if (fieldNormalized.includes(normalized) || normalized.includes(fieldNormalized)) {
-            return row;
+        // 2. Try matching by iNaturalist number (OtherCatalogNumbers)
+        const otherCatNums = String(row['OtherCatalogNumbers'] || '');
+        
+        // Check primaryId first if it's a long number
+        if (identifiers.primaryId && /^\d{7,10}$/.test(identifiers.primaryId)) {
+          if (otherCatNums.includes(identifiers.primaryId)) {
+            return { row, matchedBy: 'iNaturalist', matchedValue: identifiers.primaryId };
+          }
+        }
+        
+        // Check identified iNat number
+        if (identifiers.inat && otherCatNums) {
+          if (otherCatNums.includes(identifiers.inat)) {
+            return { row, matchedBy: 'iNaturalist', matchedValue: identifiers.inat };
+          }
+        }
+        
+        // Check all numbers found in header
+        for (const num of identifiers.allNumbers) {
+          if (otherCatNums.includes(num)) {
+            return { row, matchedBy: 'iNaturalist', matchedValue: num };
+          }
+        }
+
+        // 3. Try matching by recordNumber (personal collection number)
+        const recordNum = String(row['recordNumber'] || '').toUpperCase().trim();
+        if (recordNum) {
+          // Try primaryId first (most reliable for both formats)
+          if (identifiers.primaryId) {
+            const primaryUpper = identifiers.primaryId.toUpperCase();
+            // Exact match
+            if (recordNum === primaryUpper) {
+              return { row, matchedBy: 'recordNumber', matchedValue: identifiers.primaryId };
+            }
+            // Handle cases like KUNIK605.1 matching KUNIK605
+            const primaryBase = primaryUpper.split('.')[0];
+            if (recordNum === primaryBase) {
+              return { row, matchedBy: 'recordNumber', matchedValue: identifiers.primaryId };
+            }
+            // Handle metadata having suffix but FASTA doesn't
+            const recordBase = recordNum.split('.')[0];
+            if (primaryUpper === recordBase) {
+              return { row, matchedBy: 'recordNumber', matchedValue: identifiers.primaryId };
+            }
+          }
+          
+          // Try lastPart (for ONT-style headers)
+          if (identifiers.lastPart) {
+            const lastPartUpper = identifiers.lastPart.toUpperCase();
+            if (recordNum === lastPartUpper || 
+                lastPartUpper.startsWith(recordNum) ||
+                recordNum.startsWith(lastPartUpper.split('.')[0])) {
+              return { row, matchedBy: 'recordNumber', matchedValue: identifiers.lastPart };
+            }
+          }
+          
+          // Check direct match with extracted recordNum
+          if (identifiers.recordNum && recordNum === identifiers.recordNum) {
+            return { row, matchedBy: 'recordNumber', matchedValue: identifiers.recordNum };
+          }
+          
+          // Check all alphanumeric codes found
+          for (const code of identifiers.allAlphaNum) {
+            if (recordNum === code) {
+              return { row, matchedBy: 'recordNumber', matchedValue: code };
+            }
+          }
+          
+          // Check if recordNumber appears anywhere in the header (last resort)
+          if (identifiers.raw.toUpperCase().includes(recordNum)) {
+            return { row, matchedBy: 'recordNumber', matchedValue: recordNum };
           }
         }
       }
+
       return null;
     }
 
@@ -313,7 +487,7 @@
 
     function formatAltitude(elevation) {
       if (!elevation) return '';
-      const num = String(elevation).replace(/[^\d.-]/g, '');
+      const num = String(elevation).replace(/[^\d.\-]/g, '');
       return num ? `${num} m` : '';
     }
 
@@ -339,43 +513,66 @@
       try {
         const useAll = useAllCheckbox.checked;
         let records = [];
+        let matchLog = [];
 
         if (useAll) {
           // Use all specimens from metadata
           records = metadataData.map((row, index) => {
             const seqId = row['catalognumber'] || row['OtherCatalogNumbers'] || `Specimen_${index + 1}`;
-            return createGenBankRecord(seqId, row, null);
+            return createGenBankRecord(seqId, row, row['catalognumber']);
           });
+          matchLog.push(`Using all ${records.length} specimens from metadata`);
         } else {
           // Match FASTA sequences to metadata
           const matched = [];
           const unmatched = [];
 
           for (const seq of fastaData) {
-            const flasNumber = extractFLASNumber(seq.header);
-            if (!flasNumber) {
-              unmatched.push(seq.header);
-              continue;
-            }
-
-            const metadata = findMetadataByFLAS(flasNumber, seq.header);
-            if (metadata) {
+            const identifiers = extractIdentifiers(seq.header);
+            const match = findMetadataMatch(identifiers);
+            
+            if (match) {
               // Use the EXACT FASTA header as Sequence_ID
-              records.push(createGenBankRecord(seq.header, metadata, flasNumber));
-              matched.push(flasNumber);
+              const flasNum = match.row['catalognumber'] || '';
+              records.push(createGenBankRecord(seq.header, match.row, flasNum));
+              matched.push({
+                header: seq.header,
+                matchedBy: match.matchedBy,
+                matchedValue: match.matchedValue,
+                flas: flasNum
+              });
             } else {
-              unmatched.push(flasNumber);
+              unmatched.push(seq.header);
             }
           }
 
+          // Build detailed match log
+          matchLog.push(`=== MATCHING SUMMARY ===`);
+          matchLog.push(`Total sequences: ${fastaData.length}`);
+          matchLog.push(`Matched: ${matched.length}`);
+          matchLog.push(`Unmatched: ${unmatched.length}`);
+          matchLog.push(``);
+          
+          if (matched.length > 0) {
+            matchLog.push(`--- Matched sequences ---`);
+            const byMethod = { FLAS: 0, iNaturalist: 0, recordNumber: 0 };
+            matched.forEach(m => {
+              byMethod[m.matchedBy]++;
+            });
+            matchLog.push(`  By FLAS number: ${byMethod.FLAS}`);
+            matchLog.push(`  By iNaturalist number: ${byMethod.iNaturalist}`);
+            matchLog.push(`  By record number: ${byMethod.recordNumber}`);
+            matchLog.push(``);
+          }
+
           if (unmatched.length > 0) {
-            statusDiv.textContent = `Warning: ${unmatched.length} sequences could not be matched:\n${unmatched.join(', ')}`;
-            statusDiv.className = 'warning';
+            matchLog.push(`--- Unmatched sequences ---`);
+            unmatched.forEach(h => matchLog.push(`  ${h}`));
           }
         }
 
         if (records.length === 0) {
-          statusDiv.textContent = 'Error: No records generated. Check that FLAS numbers in FASTA match metadata.';
+          statusDiv.textContent = 'Error: No records generated. Check that identifiers in FASTA match metadata.\n\n' + matchLog.join('\n');
           statusDiv.className = 'error';
           return;
         }
@@ -394,43 +591,54 @@
         const tsvContent = rows.join('\n');
         downloadFile(tsvContent, 'genbank_source_modifiers.txt');
 
-        statusDiv.textContent = `✓ Success! Generated ${records.length} records.\nFile downloaded as genbank_source_modifiers.txt`;
+        statusDiv.innerHTML = `<div class="match-log">✓ Success! Generated ${records.length} records.\nFile downloaded as genbank_source_modifiers.txt\n\n${matchLog.join('\n')}</div>`;
         statusDiv.className = 'success';
 
       } catch (error) {
-        statusDiv.textContent = `Error: ${error.message}`;
+        statusDiv.textContent = `Error: ${error.message}\n${error.stack}`;
         statusDiv.className = 'error';
       }
     }
 
     function createGenBankRecord(sequenceId, metadata, flasNumber) {
-      // Extract FLAS number for specimen-voucher
-      let specimenVoucher = '';
-      if (flasNumber) {
-        specimenVoucher = flasNumber;
-      } else {
-        // If no FLAS number provided, try to extract from catalog fields
+      // Use FLAS number for specimen-voucher
+      let specimenVoucher = flasNumber || '';
+      
+      // If no FLAS number, try to extract from catalog fields
+      if (!specimenVoucher) {
         specimenVoucher = metadata['catalognumber'] || '';
-        if (!specimenVoucher && metadata['OtherCatalogNumbers']) {
-          const match = metadata['OtherCatalogNumbers'].match(/FLAS[_-]F[_-]\d+/i);
-          if (match) specimenVoucher = match[0];
+      }
+
+      // Build notes: combine iNaturalist link and occurrence remarks
+      let notes = [];
+      
+      // Check for iNaturalist info in VerbatimAttributes (contains the HTML link)
+      if (metadata['VerbatimAttributes'] && metadata['VerbatimAttributes'].includes('iNaturalist')) {
+        // Extract just the observation number
+        const inatMatch = metadata['VerbatimAttributes'].match(/observation[s]?\s*[#]?\s*(\d+)/i);
+        if (inatMatch) {
+          notes.push(`iNaturalist observation ${inatMatch[1]}`);
+        }
+      }
+      
+      // Also check OtherCatalogNumbers for iNat number
+      if (metadata['OtherCatalogNumbers']) {
+        const inatNum = metadata['OtherCatalogNumbers'];
+        if (/^\d+$/.test(inatNum)) {
+          notes.push(`iNaturalist observation ${inatNum}`);
         }
       }
 
-      // Build notes: combine iNaturalist number and occurrence remarks
-      let notes = [];
-      if (metadata['OtherCatalogNumbers'] && metadata['OtherCatalogNumbers'].includes('iNaturalist')) {
-        notes.push(metadata['OtherCatalogNumbers']);
-      }
       if (metadata['occurrenceremarks']) {
         notes.push(metadata['occurrenceremarks']);
       }
 
       const record = {
         'Sequence_ID': sequenceId,
-        'Organism': metadata['scientificName'] || '',
+        'Organism': (metadata['scientificName'] || '').trim(),
         'collection-date': formatDate(metadata['verbatimeventdate'] || 
-                                      `${metadata['year']}-${metadata['month']}-${metadata['day']}`),
+                                      (metadata['year'] && metadata['month'] && metadata['day'] ? 
+                                       `${metadata['year']}-${metadata['month']}-${metadata['day']}` : '')),
         'geo_loc_name': formatGeoLocation(metadata['Country'], metadata['stateprovince'], metadata['County']),
         'specimen-voucher': specimenVoucher,
         'altitude': formatAltitude(metadata['Elevation']),
@@ -438,7 +646,7 @@
         'host': metadata['Host'] || '',
         'isolation-source': metadata['Substrate'] || metadata['Habitat'] || '',
         'latitude-longitude': formatLatLon(metadata['decimalLatitude'], metadata['decimalLongitude']),
-        'note': notes.join('; ')
+        'note': [...new Set(notes)].join('; ')  // Remove duplicates
       };
 
       return record;
