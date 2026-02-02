@@ -470,11 +470,28 @@
     }
 
     function formatDate(dateStr) {
-      if (!dateStr) return '';
+      if (!dateStr || dateStr === 'undefined' || dateStr === 'null') return '';
+      
+      // Convert to string and trim
+      dateStr = String(dateStr).trim();
+      if (!dateStr || dateStr === 'NaN' || dateStr === 'undefined-undefined-undefined') return '';
+      
+      // If it's already in a good format like "15-Jun-2023", return as-is
+      if (/^\d{1,2}-[A-Za-z]{3}-\d{4}$/.test(dateStr)) {
+        return dateStr;
+      }
       
       // Try to parse various date formats
       const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
+      
+      // Check if date is valid and not the Unix epoch (which indicates parsing failure)
+      if (isNaN(date.getTime()) || date.getFullYear() < 1900 || date.getFullYear() > 2100) {
+        // Return original string if it looks like a date, otherwise empty
+        if (/\d{4}/.test(dateStr)) {
+          return dateStr; // Has a year, return as-is
+        }
+        return '';
+      }
 
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -542,6 +559,8 @@
                 flas: flasNum
               });
             } else {
+              // Include unmatched sequences with blank metadata
+              records.push(createGenBankRecord(seq.header, {}, null));
               unmatched.push(seq.header);
             }
           }
@@ -633,12 +652,27 @@
         notes.push(metadata['occurrenceremarks']);
       }
 
+      // Build the collection date - only if we have valid data
+      let collectionDate = '';
+      if (metadata['verbatimeventdate']) {
+        collectionDate = formatDate(metadata['verbatimeventdate']);
+      } else if (metadata['year'] && metadata['month'] && metadata['day']) {
+        // Only build date string if all parts are present and valid
+        const year = metadata['year'];
+        const month = metadata['month'];
+        const day = metadata['day'];
+        if (year && month && day && year !== '' && month !== '' && day !== '') {
+          collectionDate = formatDate(`${year}-${month}-${day}`);
+        }
+      } else if (metadata['year']) {
+        // If we only have year, just use that
+        collectionDate = String(metadata['year']);
+      }
+
       const record = {
         'Sequence_ID': sequenceId,
         'Organism': (metadata['scientificName'] || '').trim(),
-        'collection-date': formatDate(metadata['verbatimeventdate'] || 
-                                      (metadata['year'] && metadata['month'] && metadata['day'] ? 
-                                       `${metadata['year']}-${metadata['month']}-${metadata['day']}` : '')),
+        'collection-date': collectionDate,
         'geo_loc_name': formatGeoLocation(metadata['Country'], metadata['stateprovince'], metadata['County']),
         'specimen-voucher': specimenVoucher,
         'altitude': formatAltitude(metadata['Elevation']),
