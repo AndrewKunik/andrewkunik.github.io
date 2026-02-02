@@ -386,82 +386,76 @@
         if (identifiers.flas) {
           const catalogNum = String(row['catalognumber'] || '').toUpperCase().replace(/[_\-\s]/g, '');
           const flasNorm = identifiers.flas.replace(/[_\-\s]/g, '');
-          if (catalogNum && catalogNum.includes(flasNorm)) {
+          if (catalogNum && catalogNum === flasNorm) {
             return { row, matchedBy: 'FLAS', matchedValue: identifiers.flas };
           }
         }
 
-        // 2. Try matching by iNaturalist number (OtherCatalogNumbers)
-        const otherCatNums = String(row['OtherCatalogNumbers'] || '');
+        // 2. Try matching by iNaturalist number (OtherCatalogNumbers) - EXACT match
+        const otherCatNums = String(row['OtherCatalogNumbers'] || '').trim();
         
         // Check primaryId first if it's a long number
         if (identifiers.primaryId && /^\d{7,10}$/.test(identifiers.primaryId)) {
-          if (otherCatNums.includes(identifiers.primaryId)) {
+          if (otherCatNums === identifiers.primaryId) {
             return { row, matchedBy: 'iNaturalist', matchedValue: identifiers.primaryId };
           }
         }
         
-        // Check identified iNat number
+        // Check identified iNat number - EXACT match
         if (identifiers.inat && otherCatNums) {
-          if (otherCatNums.includes(identifiers.inat)) {
+          if (otherCatNums === identifiers.inat) {
             return { row, matchedBy: 'iNaturalist', matchedValue: identifiers.inat };
           }
         }
         
-        // Check all numbers found in header
+        // Check all numbers found in header - EXACT match
         for (const num of identifiers.allNumbers) {
-          if (otherCatNums.includes(num)) {
+          if (otherCatNums === num) {
             return { row, matchedBy: 'iNaturalist', matchedValue: num };
           }
         }
 
-        // 3. Try matching by recordNumber (personal collection number)
+        // 3. Try matching by recordNumber (personal collection number) - EXACT match only!
         const recordNum = String(row['recordNumber'] || '').toUpperCase().trim();
         if (recordNum) {
-          // Try primaryId first (most reliable for both formats)
+          // Try primaryId first - EXACT match
           if (identifiers.primaryId) {
             const primaryUpper = identifiers.primaryId.toUpperCase();
-            // Exact match
+            // Exact match only
             if (recordNum === primaryUpper) {
               return { row, matchedBy: 'recordNumber', matchedValue: identifiers.primaryId };
             }
-            // Handle cases like KUNIK605.1 matching KUNIK605
+            // Handle cases like KUNIK605.1 in FASTA matching KUNIK605 in metadata
+            // But ONLY if the base is an exact match (not partial)
             const primaryBase = primaryUpper.split('.')[0];
-            if (recordNum === primaryBase) {
+            const recordBase = recordNum.split('.')[0];
+            if (primaryBase === recordBase && primaryUpper !== primaryBase) {
+              // FASTA has suffix like .1, metadata doesn't - OK to match
               return { row, matchedBy: 'recordNumber', matchedValue: identifiers.primaryId };
             }
-            // Handle metadata having suffix but FASTA doesn't
-            const recordBase = recordNum.split('.')[0];
-            if (primaryUpper === recordBase) {
+            if (recordNum !== recordBase && primaryUpper === recordBase) {
+              // Metadata has suffix, FASTA doesn't - OK to match
               return { row, matchedBy: 'recordNumber', matchedValue: identifiers.primaryId };
             }
           }
           
-          // Try lastPart (for ONT-style headers)
+          // Try lastPart - EXACT match only
           if (identifiers.lastPart) {
             const lastPartUpper = identifiers.lastPart.toUpperCase();
-            if (recordNum === lastPartUpper || 
-                lastPartUpper.startsWith(recordNum) ||
-                recordNum.startsWith(lastPartUpper.split('.')[0])) {
+            if (recordNum === lastPartUpper) {
+              return { row, matchedBy: 'recordNumber', matchedValue: identifiers.lastPart };
+            }
+            // Handle suffix matching (e.g., KUNIK605.1 vs KUNIK605)
+            const lastPartBase = lastPartUpper.split('.')[0];
+            const recordBase = recordNum.split('.')[0];
+            if (lastPartBase === recordBase && (lastPartUpper !== lastPartBase || recordNum !== recordBase)) {
               return { row, matchedBy: 'recordNumber', matchedValue: identifiers.lastPart };
             }
           }
           
-          // Check direct match with extracted recordNum
+          // Check extracted recordNum - EXACT match only
           if (identifiers.recordNum && recordNum === identifiers.recordNum) {
             return { row, matchedBy: 'recordNumber', matchedValue: identifiers.recordNum };
-          }
-          
-          // Check all alphanumeric codes found
-          for (const code of identifiers.allAlphaNum) {
-            if (recordNum === code) {
-              return { row, matchedBy: 'recordNumber', matchedValue: code };
-            }
-          }
-          
-          // Check if recordNumber appears anywhere in the header (last resort)
-          if (identifiers.raw.toUpperCase().includes(recordNum)) {
-            return { row, matchedBy: 'recordNumber', matchedValue: recordNum };
           }
         }
       }
