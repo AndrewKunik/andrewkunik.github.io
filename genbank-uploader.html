@@ -392,7 +392,15 @@
         }
 
         // 2. Try matching by iNaturalist number (OtherCatalogNumbers) - EXACT match
-        const otherCatNums = String(row['OtherCatalogNumbers'] || '').trim();
+        let otherCatNums = String(row['OtherCatalogNumbers'] || '').trim();
+        // Handle Excel storing numbers as floats (e.g., "135124662.0" -> "135124662")
+        if (otherCatNums.endsWith('.0')) {
+          otherCatNums = otherCatNums.slice(0, -2);
+        }
+        // Also try converting to integer if it's a number
+        if (row['OtherCatalogNumbers'] && typeof row['OtherCatalogNumbers'] === 'number') {
+          otherCatNums = String(Math.floor(row['OtherCatalogNumbers']));
+        }
         
         // Check primaryId first if it's a long number
         if (identifiers.primaryId && /^\d{7,10}$/.test(identifiers.primaryId)) {
