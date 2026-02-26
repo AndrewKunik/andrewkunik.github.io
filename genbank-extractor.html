@@ -479,8 +479,9 @@
                     const parts = header.split(/\s+/);
                     const seqId = parts[0];
                     
-                    // Check if it looks like a GenBank accession
-                    if (/^[A-Z]+\d+(\.\d+)?$/.test(seqId)) {
+                    // FIX: Match standard GenBank accessions (AB123456)
+                    // AND RefSeq accessions with underscores (NR_123456, NM_001234, XM_012345, XR_012345, etc.)
+                    if (/^[A-Z]{1,3}_?\d+(\.\d+)?$/.test(seqId)) {
                         if (!ids.includes(seqId)) {
                             ids.push(seqId);
                         }
@@ -647,13 +648,20 @@
         function searchLocalRecords(sequenceId) {
             if (Object.keys(localRecords).length === 0) return null;
             
-            // Try different matching strategies
+            // FIX: Try different matching strategies, being careful with underscores
+            // For RefSeq IDs like NR_123456, the underscore is meaningful and should NOT be stripped
             const searchKeys = [
-                sequenceId,
-                sequenceId.split('.')[0],  // Remove version
-                sequenceId.replace(/[-_]/g, ''),  // Remove dashes and underscores
-                sequenceId.toUpperCase(),
+                sequenceId,                        // Exact match: NR_123456.1
+                sequenceId.split('.')[0],           // Remove version: NR_123456
+                sequenceId.toUpperCase(),           // Uppercase: NR_123456
+                sequenceId.split('.')[0].toUpperCase(), // Remove version + uppercase
             ];
+            
+            // Also try stripping underscores as a fallback (for non-RefSeq IDs)
+            const strippedId = sequenceId.replace(/[-_]/g, '');
+            if (strippedId !== sequenceId) {
+                searchKeys.push(strippedId);
+            }
             
             // Direct lookup
             for (let key of searchKeys) {
@@ -683,7 +691,8 @@
         
         function parseGenBankFile(content) {
             const records = [];
-            const entries = content.split('\n//\n');
+            // FIX: Split on // that appears at the start of a line, with flexible whitespace/newlines
+            const entries = content.split(/\n\/\/\s*/);
             
             for (let entry of entries) {
                 entry = entry.trim();
