@@ -1,0 +1,1486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fungal Morphometrics</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'EB Garamond', Garamond, serif; }
+    code { background: #e8ddd0; padding: 1px 5px; border-radius: 3px; font-size: 13px; }
+  </style>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useCallback, useRef, useEffect } = React;
+
+// ── Statistics Engine ─────────────────────────────────────────────────────────
+
+function calcStats(data) {
+  const n = data.length;
+  if (n === 0) return null;
+  const mean = data.reduce((a, b) => a + b, 0) / n;
+  const std = Math.sqrt(data.reduce((s, x) => s + (x - mean) ** 2, 0) / n);
+  return { mean, std, n };
+}
+
+function iqrOutliers(data) {
+  const sorted = [...data].sort((a, b) => a - b);
+  const n = sorted.length;
+  const Q1 = percentile(sorted, 25);
+  const Q3 = percentile(sorted, 75);
+  const IQR = Q3 - Q1;
+  const lo = Q1 - 1.5 * IQR;
+  const hi = Q3 + 1.5 * IQR;
+  const outLow = data.filter((x) => x < lo);
+  const outHigh = data.filter((x) => x > hi);
+  const central = data.filter((x) => x >= lo && x <= hi);
+  return {
+    lo,
+    hi,
+    outLow,
+    outHigh,
+    centralMin: central.length ? Math.min(...central) : null,
+    centralMax: central.length ? Math.max(...central) : null,
+  };
+}
+
+function percentile(sorted, p) {
+  const i = (p / 100) * (sorted.length - 1);
+  const lo = Math.floor(i);
+  const hi = Math.ceil(i);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
+}
+
+function formatDimension(data) {
+  const stats = calcStats(data);
+  const iqr = iqrOutliers(data);
+  if (!stats || iqr.centralMin === null) return null;
+  const loStr = iqr.outLow.length ? `(${Math.min(...iqr.outLow)})` : "";
+  const hiStr = iqr.outHigh.length ? `(${Math.max(...iqr.outHigh)})` : "";
+  return {
+    range: `${loStr}${iqr.centralMin}–${iqr.centralMax}${hiStr}`,
+    mean: stats.mean,
+    std: stats.std,
+    n: stats.n,
+  };
+}
+
+function parseValues(str) {
+  if (!str || !str.trim()) return [];
+  return str
+    .split(/[,\s]+/)
+    .map((s) => s.trim())
+    .filter((s) => s && !isNaN(parseFloat(s)))
+    .map(parseFloat);
+}
+
+// ── Input Validation ──────────────────────────────────────────────────────────
+
+function validateInput(raw) {
+  if (!raw || !raw.trim()) return [];
+  const warnings = [];
+
+  // 1. Comma used as decimal (e.g. "8,0" → should be "8.0")
+  //    Pattern: digit(s) comma digit(s) NOT followed by a space+digit (which would be normal separator)
+  const commaDecimal = /(\d+),(\d+)(?!\s*\d)/g;
+  let m;
+  while ((m = commaDecimal.exec(raw)) !== null) {
+    warnings.push({
+      type: "comma_decimal",
+      index: m.index,
+      text: m[0],
+      message: `"${m[0]}" — comma used as decimal? Did you mean ${m[1]}.${m[2]}?`,
+    });
+  }
+
+  // 2. Period used as separator (e.g. "7.1. 6.7" or "7.1.6.7")
+  const periodSep = /(\d+\.\d+)\.(\s*\d)/g;
+  while ((m = periodSep.exec(raw)) !== null) {
+    warnings.push({
+      type: "period_separator",
+      index: m.index,
+      text: m[0],
+      message: `"${m[0].trim()}" — extra period? Possibly a missing comma between values.`,
+    });
+  }
+
+  // 3. Missing comma between values (e.g. "7.6 8.9" — two valid numbers separated by space only)
+  //    Look for number-space-number without a comma in between
+  const missingComma = /(\d+\.?\d*)\s+(\d+\.?\d*)/g;
+  const cleaned = raw.replace(/,/g, "##COMMA##");
+  const segments = raw.split(",");
+  for (const seg of segments) {
+    const trimmed = seg.trim();
+    // If a single comma-separated segment contains space-separated numbers
+    const parts = trimmed.split(/\s+/).filter((p) => p && /^\d+\.?\d*$/.test(p));
+    if (parts.length > 1) {
+      warnings.push({
+        type: "missing_comma",
+        index: raw.indexOf(trimmed),
+        text: trimmed,
+        message: `"${trimmed}" — missing comma? Looks like ${parts.length} values without a separator.`,
+      });
+    }
+  }
+
+  // 4. Statistical outlier detection (value way outside the group)
+  const vals = parseValues(raw);
+  if (vals.length >= 4) {
+    const stats = calcStats(vals);
+    const sorted = [...vals].sort((a, b) => a - b);
+    const Q1 = percentile(sorted, 25);
+    const Q3 = percentile(sorted, 75);
+    const IQR = Q3 - Q1;
+    const loFence = Q1 - 3 * IQR; // extreme outlier fence (3×IQR)
+    const hiFence = Q3 + 3 * IQR;
+    for (const v of vals) {
+      if (v < loFence || v > hiFence) {
+        warnings.push({
+          type: "extreme_value",
+          text: String(v),
+          message: `${v} looks unusually ${v < loFence ? "low" : "high"} compared to the rest (x̄ = ${stats.mean.toFixed(1)}). Typo?`,
+        });
+      }
+    }
+  }
+
+  // Deduplicate warnings by message
+  const seen = new Set();
+  return warnings.filter((w) => {
+    if (seen.has(w.message)) return false;
+    seen.add(w.message);
+    return true;
+  });
+}
+
+function analyzeStructure(structure) {
+  const dims = structure.dimensions.filter((d) => {
+    const vals = parseValues(d.values);
+    return vals.length > 0;
+  });
+  if (dims.length === 0) return null;
+
+  const keys = dims.map((d) => d.label.toLowerCase().trim());
+  const isLW = keys.length === 2 && keys.includes("length") && keys.includes("width");
+
+  const results = [];
+  let lengthVals = null;
+  let widthVals = null;
+
+  for (const dim of dims) {
+    const vals = parseValues(dim.values);
+    const fmt = formatDimension(vals);
+    if (!fmt) continue;
+    const k = dim.label.toLowerCase().trim();
+    if (k === "length") lengthVals = vals;
+    if (k === "width") widthVals = vals;
+
+    if (!isLW) {
+      results.push(
+        `${dim.label} = ${fmt.range} µm, x̄ = ${fmt.mean.toFixed(1)} ± ${fmt.std.toFixed(1)} µm`
+      );
+    }
+  }
+
+  if (isLW && lengthVals && widthVals) {
+    const lf = formatDimension(lengthVals);
+    const wf = formatDimension(widthVals);
+    if (lf && wf) {
+      results.push(
+        `${lf.range} (x̄ = ${lf.mean.toFixed(1)} ± ${lf.std.toFixed(1)}) × ${wf.range} (x̄ = ${wf.mean.toFixed(1)} ± ${wf.std.toFixed(1)}) µm`
+      );
+    }
+  }
+
+  if (structure.calcQ && lengthVals && widthVals) {
+    const minLen = Math.min(lengthVals.length, widthVals.length);
+    const Qs = [];
+    for (let i = 0; i < minLen; i++) {
+      if (widthVals[i] !== 0) Qs.push(lengthVals[i] / widthVals[i]);
+    }
+    if (Qs.length > 0) {
+      const qStats = calcStats(Qs);
+      results.push(
+        `Q = ${Math.min(...Qs).toFixed(2)}–${Math.max(...Qs).toFixed(2)} (x̄ = ${qStats.mean.toFixed(2)} ± ${qStats.std.toFixed(2)})`
+      );
+    }
+  }
+
+  return { name: structure.name, description: structure.description || "", results };
+}
+
+// ── Suggested Templates ───────────────────────────────────────────────────────
+
+const SUGGESTED_STRUCTURES = [
+  { name: "Basidiospores", dims: ["Length", "Width"], calcQ: true },
+  { name: "Basidia", dims: ["Length", "Width", "Sterigmata length"], calcQ: false },
+  {
+    name: "Cheilocystidia",
+    dims: ["Length", "Width (at venter)", "Apex width", "Neck width (at narrowest point)"],
+    calcQ: false,
+  },
+  {
+    name: "Pleurocystidia",
+    dims: ["Length", "Width (at venter)", "Apex width", "Neck width (at narrowest point)"],
+    calcQ: false,
+  },
+  { name: "Subhymenium", dims: [], calcQ: false },
+  { name: "Hymenophoral trama", dims: [], calcQ: false },
+  { name: "Pileipellis", dims: [], calcQ: false },
+  {
+    name: "Pileocystidia",
+    dims: ["Length", "Width (at venter)", "Apex width", "Neck width (at narrowest point)"],
+    calcQ: false,
+  },
+  { name: "Pileus trama", dims: [], calcQ: false },
+  {
+    name: "Caulocystidia",
+    dims: ["Length", "Width (at venter)", "Apex width", "Neck width (at narrowest point)"],
+    calcQ: false,
+  },
+];
+
+const COMMON_DIMS = [
+  "Length",
+  "Width",
+  "Width (at venter)",
+  "Apex width",
+  "Neck width (at narrowest point)",
+  "Head",
+  "Sterigmata length",
+  "Venter",
+  "Neck",
+  "Constriction",
+];
+
+// ── Unique ID ─────────────────────────────────────────────────────────────────
+let _id = 0;
+const uid = () => `_${++_id}`;
+
+// ── Components ────────────────────────────────────────────────────────────────
+
+function DimensionRow({ dim, onChange, onRemove }) {
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setShowSuggestions(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtered = COMMON_DIMS.filter(
+    (d) => d.toLowerCase().includes(dim.label.toLowerCase()) && d.toLowerCase() !== dim.label.toLowerCase()
+  );
+
+  const warnings = validateInput(dim.values);
+  const hasWarnings = warnings.length > 0;
+
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+        <div ref={ref} style={{ position: "relative", width: 200, flexShrink: 0 }}>
+          <input
+            type="text"
+            value={dim.label}
+            placeholder="e.g. Length"
+            onChange={(e) => onChange({ ...dim, label: e.target.value })}
+            onFocus={() => setShowSuggestions(true)}
+            style={{
+              width: "100%",
+              padding: "7px 10px",
+              border: "1px solid #b8a590",
+              borderRadius: 4,
+              background: "#faf6f1",
+              fontFamily: "'EB Garamond', Garamond, serif",
+              fontSize: 14,
+              color: "#3d2b1f",
+              boxSizing: "border-box",
+            }}
+          />
+          {showSuggestions && filtered.length > 0 && (
+            <div
+              style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                right: 0,
+                background: "#fff",
+                border: "1px solid #b8a590",
+                borderRadius: 4,
+                zIndex: 20,
+                maxHeight: 150,
+                overflowY: "auto",
+                boxShadow: "0 4px 12px rgba(61,43,31,0.12)",
+              }}
+            >
+              {filtered.map((s) => (
+                <div
+                  key={s}
+                  onClick={() => {
+                    onChange({ ...dim, label: s });
+                    setShowSuggestions(false);
+                  }}
+                  style={{
+                    padding: "6px 10px",
+                    cursor: "pointer",
+                    fontSize: 13,
+                    fontFamily: "'EB Garamond', Garamond, serif",
+                    color: "#3d2b1f",
+                    borderBottom: "1px solid #eee",
+                  }}
+                  onMouseEnter={(e) => (e.target.style.background = "#f5efe8")}
+                  onMouseLeave={(e) => (e.target.style.background = "#fff")}
+                >
+                  {s}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <textarea
+          value={dim.values}
+          placeholder="Comma-separated values, e.g. 7.4, 7.9, 8.2, 7.6"
+          onChange={(e) => onChange({ ...dim, values: e.target.value })}
+          rows={2}
+          style={{
+            flex: 1,
+            padding: "7px 10px",
+            border: hasWarnings ? "2px solid #d4a020" : "1px solid #b8a590",
+            borderRadius: 4,
+            background: hasWarnings ? "#fffbe6" : "#faf6f1",
+            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            fontSize: 13,
+            color: "#3d2b1f",
+            resize: "vertical",
+            lineHeight: 1.5,
+          }}
+        />
+        <span style={{ color: "#8a7060", fontSize: 12, fontFamily: "monospace", minWidth: 32, textAlign: "center", paddingTop: 8 }}>
+          n={parseValues(dim.values).length}
+        </span>
+        <button
+          onClick={onRemove}
+          title="Remove dimension"
+          style={{
+            background: "none",
+            border: "none",
+            color: "#b8a590",
+            cursor: "pointer",
+            fontSize: 18,
+            padding: "4px 6px",
+            lineHeight: 1,
+            borderRadius: 4,
+          }}
+          onMouseEnter={(e) => (e.target.style.color = "#a0462e")}
+          onMouseLeave={(e) => (e.target.style.color = "#b8a590")}
+        >
+          ×
+        </button>
+      </div>
+      {hasWarnings && (
+        <div style={{ marginLeft: 208, marginTop: 3, marginBottom: 4 }}>
+          {warnings.map((w, i) => (
+            <div
+              key={i}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "3px 9px",
+                marginRight: 6,
+                marginBottom: 3,
+                background: w.type === "extreme_value" ? "#fff3e0" : "#fffbe6",
+                border: `1px solid ${w.type === "extreme_value" ? "#f0a030" : "#e0c850"}`,
+                borderRadius: 12,
+                fontSize: 11,
+                fontFamily: "'JetBrains Mono', monospace",
+                color: "#6b4e00",
+                lineHeight: 1.4,
+              }}
+            >
+              <span style={{ fontSize: 13 }}>⚠</span>
+              {w.message}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── User Guide ────────────────────────────────────────────────────────────────
+
+function UserGuide({ onClose, onLoadExample }) {
+  return (
+    <div
+      style={{
+        border: "1px solid #b8a590",
+        borderRadius: 8,
+        marginBottom: 20,
+        background: "#fffcf8",
+        overflow: "hidden",
+        boxShadow: "0 2px 12px rgba(61,43,31,0.08)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "10px 16px",
+          background: "linear-gradient(135deg, #5c4033, #7a5c47)",
+        }}
+      >
+        <span style={{ color: "#f5efe8", fontWeight: 600, fontSize: 16, letterSpacing: 0.5 }}>
+          User Guide
+        </span>
+        <button
+          onClick={onClose}
+          style={{
+            background: "none",
+            border: "none",
+            color: "rgba(255,255,255,0.7)",
+            cursor: "pointer",
+            fontSize: 18,
+            padding: "2px 6px",
+          }}
+        >
+          ×
+        </button>
+      </div>
+      <div
+        style={{
+          padding: "18px 20px",
+          fontFamily: "'EB Garamond', Garamond, serif",
+          fontSize: 15,
+          lineHeight: 1.75,
+          color: "#3d2b1f",
+        }}
+      >
+        <h3 style={{ margin: "0 0 10px", fontSize: 18, color: "#5c4033" }}>How it works</h3>
+        <p style={{ margin: "0 0 12px" }}>
+          This tool computes publication-ready morphometric statistics for fungal descriptions. You build a sheet of <strong>structures</strong> (spores, cystidia, basidia, etc.), enter measurements, and it produces formatted output with ranges, means, standard deviations, outlier detection, and Q ratios.
+        </p>
+
+        <h3 style={{ margin: "16px 0 8px", fontSize: 16, color: "#5c4033" }}>Step by step</h3>
+
+        <div style={{ margin: "0 0 12px", padding: "10px 14px", background: "#f5efe8", borderRadius: 6, fontSize: 14 }}>
+          <p style={{ margin: "0 0 6px" }}>
+            <strong>1.</strong> Enter your <strong>species or collection name</strong> at the top.
+          </p>
+          <p style={{ margin: "0 0 6px" }}>
+            <strong>2.</strong> Add structures using <strong>"+ From Template"</strong> (pre-configured dimension slots) or <strong>"+ Blank Structure"</strong> (fully custom). You can add all templates at once.
+          </p>
+          <p style={{ margin: "0 0 6px" }}>
+            <strong>3.</strong> For each structure, type a <strong>morphological description</strong> in the italic text field (optional — this becomes the prose in your output).
+          </p>
+          <p style={{ margin: "0 0 6px" }}>
+            <strong>4.</strong> Enter <strong>comma-separated measurements</strong> in each dimension row (e.g. <code style={{ background: "#e8ddd0", padding: "1px 5px", borderRadius: 3, fontSize: 13 }}>7.4, 7.9, 8.2, 7.6, 7.5</code>). The tool will flag potential typos with yellow warnings.
+          </p>
+          <p style={{ margin: "0 0 6px" }}>
+            <strong>5.</strong> Add or remove dimension rows as needed — use the autocomplete suggestions or type any custom label.
+          </p>
+          <p style={{ margin: "0 0 6px" }}>
+            <strong>6.</strong> Check <strong>"Q ratio"</strong> on structures with Length + Width (typically spores).
+          </p>
+          <p style={{ margin: "0 0 0" }}>
+            <strong>7.</strong> Click <strong>"Compute Statistics"</strong> to generate output. Copy it to your manuscript.
+          </p>
+        </div>
+
+        <h3 style={{ margin: "16px 0 8px", fontSize: 16, color: "#5c4033" }}>Output format</h3>
+        <p style={{ margin: "0 0 8px" }}>
+          When a structure has only <strong>Length + Width</strong>, the output uses the condensed format:
+        </p>
+        <div style={{ margin: "0 0 10px", padding: "8px 12px", background: "#f0ebe3", borderRadius: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 12, lineHeight: 1.6, color: "#3d2b1f" }}>
+          <em><strong>Basidiospores</strong></em> subglobose; ornamentation warty; orange-brown in 3% KOH; (5.6)7.8–9.9 (x̄ = 8.9 ± 0.9) × 6.7–8.4 (x̄ = 7.5 ± 0.5) µm; Q = 0.77–1.38 (x̄ = 1.19 ± 0.11).
+        </div>
+        <p style={{ margin: "0 0 8px" }}>
+          When a structure has <strong>multiple named dimensions</strong>, each is listed explicitly:
+        </p>
+        <div style={{ margin: "0 0 10px", padding: "8px 12px", background: "#f0ebe3", borderRadius: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 12, lineHeight: 1.6, color: "#3d2b1f" }}>
+          <em><strong>Cheilocystidia</strong></em> lecythiform, apex capitate; hyaline; Length = 20.6–30.1 µm, x̄ = 26.3 ± 2.9 µm; Width (at venter) = 5.7–11.3 µm, x̄ = 8.5 ± 1.7 µm; Apex width = 2.8–4.6 µm, x̄ = 3.4 ± 0.5 µm.
+        </div>
+
+        <h3 style={{ margin: "16px 0 8px", fontSize: 16, color: "#5c4033" }}>Validation warnings</h3>
+        <p style={{ margin: "0 0 8px" }}>
+          The tool automatically checks your input for common data-entry mistakes:
+        </p>
+        <div style={{ margin: "0 0 4px", display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ background: "#fffbe6", border: "1px solid #e0c850", borderRadius: 12, padding: "2px 9px", fontSize: 12, fontFamily: "monospace" }}>⚠ "8,0" — comma used as decimal?</span>
+          <span style={{ fontSize: 13, color: "#6b5840" }}>You typed <code>8,0</code> instead of <code>8.0</code></span>
+        </div>
+        <div style={{ margin: "4px 0", display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ background: "#fffbe6", border: "1px solid #e0c850", borderRadius: 12, padding: "2px 9px", fontSize: 12, fontFamily: "monospace" }}>⚠ "7.1. 6" — extra period?</span>
+          <span style={{ fontSize: 13, color: "#6b5840" }}>Period used as separator instead of a comma</span>
+        </div>
+        <div style={{ margin: "4px 0", display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ background: "#fffbe6", border: "1px solid #e0c850", borderRadius: 12, padding: "2px 9px", fontSize: 12, fontFamily: "monospace" }}>⚠ "7.6 8.9" — missing comma?</span>
+          <span style={{ fontSize: 13, color: "#6b5840" }}>Two values separated by space with no comma</span>
+        </div>
+        <div style={{ margin: "4px 0 12px", display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ background: "#fff3e0", border: "1px solid #f0a030", borderRadius: 12, padding: "2px 9px", fontSize: 12, fontFamily: "monospace" }}>⚠ 2.1 looks unusually low</span>
+          <span style={{ fontSize: 13, color: "#6b5840" }}>Statistical outlier that might be a typo</span>
+        </div>
+
+        <h3 style={{ margin: "16px 0 8px", fontSize: 16, color: "#5c4033" }}>Saving &amp; loading</h3>
+        <p style={{ margin: "0 0 12px" }}>
+          Use <strong>"↓ Save Project"</strong> to download your work as a <code>.morpho.json</code> file (named after your species). Use <strong>"↑ Load Project"</strong> to re-upload it later and pick up where you left off. All structures, descriptions, measurements, and notes are preserved.
+        </p>
+
+        <button
+          onClick={onLoadExample}
+          style={{
+            padding: "10px 22px",
+            background: "#5c4033",
+            color: "#f5efe8",
+            border: "none",
+            borderRadius: 6,
+            fontFamily: "'EB Garamond', Garamond, serif",
+            fontSize: 15,
+            fontWeight: 600,
+            cursor: "pointer",
+            letterSpacing: 0.3,
+          }}
+          onMouseEnter={(e) => (e.target.style.background = "#7a5c47")}
+          onMouseLeave={(e) => (e.target.style.background = "#5c4033")}
+        >
+          ✦ Load full worked example
+        </button>
+        <span style={{ marginLeft: 10, fontSize: 13, color: "#8a7060", fontStyle: "italic" }}>
+          Populates the form with sample Gymnopilus data
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── Example Data ──────────────────────────────────────────────────────────────
+
+function getExampleData() {
+  return {
+    speciesName: "Gymnopilus sp. nov. — Example Collection",
+    notes: "Collected from hardwood log (Quercus), gregarious habit. October 2024, temperate deciduous forest. KOH 3% and Melzer's reagent tested. SEM images pending.",
+    structures: [
+      {
+        id: uid(), name: "Basidiospores", description: "subglobose in face view; ornamentation warty, of relatively equidistant large warts; small suprahilar plage; orange-brown in 3% KOH, darkening in Melzer's reagent", calcQ: true,
+        dimensions: [
+          { id: uid(), label: "Length", values: "9.5, 8.6, 8.4, 8.8, 8.6, 8.8, 8.6, 8.9, 7.8, 9.2, 9.5, 8.8, 8.8, 9.2, 9.9, 9.1, 9.2, 8.9, 9.5, 9.5, 9.8" },
+          { id: uid(), label: "Width", values: "6.9, 6.8, 7.1, 6.7, 7.0, 7.0, 7.4, 7.9, 6.8, 7.8, 7.8, 7.7, 7.4, 7.5, 7.7, 8.4, 7.9, 7.7, 8.1, 7.6, 7.9" },
+        ],
+      },
+      {
+        id: uid(), name: "Basidia", description: "clavate, 4-sterigmate, typically hyaline but with some oleiferous forms interspersed", calcQ: false,
+        dimensions: [
+          { id: uid(), label: "Length", values: "24.2, 27.1, 29.3, 26.5, 28.0, 25.8" },
+          { id: uid(), label: "Width", values: "8.5, 9.1, 8.8, 9.0, 8.3, 9.2" },
+          { id: uid(), label: "Sterigmata length", values: "4.9, 5.2, 5.5, 5.1, 5.8, 5.3" },
+        ],
+      },
+      {
+        id: uid(), name: "Cheilocystidia", description: "lecythiform; apex capitate, sometimes subcapitate; hyaline", calcQ: false,
+        dimensions: [
+          { id: uid(), label: "Length", values: "22.9, 21.3, 23.8, 25.2, 25.7, 22.7, 24.0, 31.8, 34.9, 29.8" },
+          { id: uid(), label: "Width (at venter)", values: "8.1, 6.1, 6.4, 6.5, 5.8, 6.8, 7.1, 6.3, 7.7, 5.8, 8.9, 5.9, 5.9" },
+          { id: uid(), label: "Apex width", values: "4.8, 4.5, 3.6, 5.1, 4.2, 4.0, 4.7, 4.3, 3.6, 4.1, 3.9, 3.5, 4.2, 3.8, 4.0, 3.5, 4.5" },
+          { id: uid(), label: "Neck width (at narrowest point)", values: "3.2, 2.5, 2.8, 2.1, 2.6, 1.8, 2.3, 2.8, 2.2, 3.1, 2.7, 2.1, 2.4, 2.8, 2.7, 3.8, 2.2" },
+        ],
+      },
+      {
+        id: uid(), name: "Pleurocystidia", description: "absent", calcQ: false,
+        dimensions: [{ id: uid(), label: "", values: "" }],
+      },
+      {
+        id: uid(), name: "Subhymenium", description: "ramose", calcQ: false,
+        dimensions: [{ id: uid(), label: "", values: "" }],
+      },
+      {
+        id: uid(), name: "Hymenophoral trama", description: "subparallel, hyaline, oleiferous hyphae uncommon", calcQ: false,
+        dimensions: [{ id: uid(), label: "", values: "" }],
+      },
+      {
+        id: uid(), name: "Pileipellis", description: "a cutis of radially arranged, cylindric hyphae 4–8 µm wide, with scattered oleiferous elements", calcQ: false,
+        dimensions: [{ id: uid(), label: "", values: "" }],
+      },
+      {
+        id: uid(), name: "Pileocystidia", description: "present, ventricose-tibiiform with a long neck, hyaline", calcQ: false,
+        dimensions: [
+          { id: uid(), label: "Apex width", values: "2.5, 2.9, 2.6, 2.6, 3.0, 3.1, 2.1" },
+          { id: uid(), label: "Neck width (at narrowest point)", values: "1.4, 1.4, 1.2, 1.4" },
+        ],
+      },
+      {
+        id: uid(), name: "Pileus trama", description: "subparallel, hyaline", calcQ: false,
+        dimensions: [{ id: uid(), label: "", values: "" }],
+      },
+      {
+        id: uid(), name: "Caulocystidia", description: "ventricose capitate to subcapitate with a long neck, venter of variable width; sometimes with clamp connections; hyaline but sometimes oleiferous", calcQ: false,
+        dimensions: [
+          { id: uid(), label: "Length", values: "37.8, 18.6, 32.2, 38.1, 32.7, 28.1, 42.0, 38.0, 32.0, 31.0" },
+          { id: uid(), label: "Width (at venter)", values: "7.5, 4.2, 5.6, 6.7, 5.5, 5.0, 5.1, 6.5, 5.7, 4.1, 5.9, 4.7, 4.5, 5.3" },
+          { id: uid(), label: "Apex width", values: "3.4, 3.4, 2.6, 2.7, 2.7, 1.8, 2.5, 3.6, 3.1, 3.4, 3.0, 3.1, 3.2, 2.9, 3.2, 3.0, 2.9, 3.1, 2.6, 3.1, 3.3, 3.4" },
+          { id: uid(), label: "Neck width (at narrowest point)", values: "2.1, 2.1, 1.6, 2.2, 1.7, 1.5, 2.0, 1.7, 1.6, 1.7, 1.5, 1.8, 1.7, 1.5, 1.9" },
+        ],
+      },
+    ],
+  };
+}
+
+function StructureCard({ structure, onUpdate, onRemove, onMoveUp, onMoveDown, isFirst, isLast }) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  const addDim = () => {
+    onUpdate({
+      ...structure,
+      dimensions: [...structure.dimensions, { id: uid(), label: "", values: "" }],
+    });
+  };
+
+  const updateDim = (idx, newDim) => {
+    const dims = [...structure.dimensions];
+    dims[idx] = newDim;
+    onUpdate({ ...structure, dimensions: dims });
+  };
+
+  const removeDim = (idx) => {
+    onUpdate({
+      ...structure,
+      dimensions: structure.dimensions.filter((_, i) => i !== idx),
+    });
+  };
+
+  const hasData = structure.dimensions.some((d) => parseValues(d.values).length > 0);
+
+  return (
+    <div
+      style={{
+        border: "1px solid #c9b9a8",
+        borderRadius: 8,
+        marginBottom: 16,
+        background: "#fffcf8",
+        boxShadow: "0 1px 4px rgba(61,43,31,0.06)",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "10px 14px",
+          background: hasData ? "linear-gradient(135deg, #5c4033, #7a5c47)" : "linear-gradient(135deg, #8a7060, #a0937e)",
+          cursor: "pointer",
+        }}
+        onClick={() => setCollapsed(!collapsed)}
+      >
+        <span style={{ color: "#fff", fontSize: 12, opacity: 0.7, userSelect: "none" }}>
+          {collapsed ? "▸" : "▾"}
+        </span>
+        <input
+          type="text"
+          value={structure.name}
+          onChange={(e) => {
+            e.stopPropagation();
+            onUpdate({ ...structure, name: e.target.value });
+          }}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            flex: 1,
+            background: "transparent",
+            border: "none",
+            borderBottom: "1px solid rgba(255,255,255,0.3)",
+            color: "#fff",
+            fontFamily: "'EB Garamond', Garamond, serif",
+            fontSize: 17,
+            fontWeight: 600,
+            letterSpacing: 0.3,
+            padding: "2px 0",
+            outline: "none",
+          }}
+        />
+        <label
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            color: "#fff",
+            fontSize: 12,
+            fontFamily: "'EB Garamond', Garamond, serif",
+            opacity: 0.85,
+            cursor: "pointer",
+            userSelect: "none",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={structure.calcQ}
+            onChange={(e) => onUpdate({ ...structure, calcQ: e.target.checked })}
+            style={{ accentColor: "#d4a574" }}
+          />
+          Q ratio
+        </label>
+        <div style={{ display: "flex", gap: 2 }} onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={onMoveUp}
+            disabled={isFirst}
+            title="Move up"
+            style={{
+              background: "none",
+              border: "none",
+              color: isFirst ? "rgba(255,255,255,0.25)" : "#fff",
+              cursor: isFirst ? "default" : "pointer",
+              fontSize: 14,
+              padding: "2px 5px",
+            }}
+          >
+            ↑
+          </button>
+          <button
+            onClick={onMoveDown}
+            disabled={isLast}
+            title="Move down"
+            style={{
+              background: "none",
+              border: "none",
+              color: isLast ? "rgba(255,255,255,0.25)" : "#fff",
+              cursor: isLast ? "default" : "pointer",
+              fontSize: 14,
+              padding: "2px 5px",
+            }}
+          >
+            ↓
+          </button>
+          <button
+            onClick={onRemove}
+            title="Remove structure"
+            style={{
+              background: "none",
+              border: "none",
+              color: "rgba(255,255,255,0.6)",
+              cursor: "pointer",
+              fontSize: 16,
+              padding: "2px 6px",
+            }}
+            onMouseEnter={(e) => (e.target.style.color = "#ffb3b3")}
+            onMouseLeave={(e) => (e.target.style.color = "rgba(255,255,255,0.6)")}
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      {!collapsed && (
+        <div style={{ padding: "12px 14px" }}>
+          <div style={{ marginBottom: 6 }}>
+            <textarea
+              value={structure.description || ""}
+              placeholder="Morphological description (optional) — e.g. 'lecythiform, apex capitate, sometimes subcapitate; hyaline'"
+              onChange={(e) => onUpdate({ ...structure, description: e.target.value })}
+              rows={2}
+              style={{
+                width: "100%",
+                padding: "7px 10px",
+                border: "1px solid #d4ccc0",
+                borderRadius: 4,
+                background: "#fdf9f4",
+                fontFamily: "'EB Garamond', Garamond, serif",
+                fontSize: 14,
+                fontStyle: "italic",
+                color: "#5c4a3a",
+                resize: "vertical",
+                boxSizing: "border-box",
+                lineHeight: 1.5,
+              }}
+            />
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              padding: "4px 0 8px",
+              fontSize: 11,
+              color: "#8a7060",
+              fontFamily: "'EB Garamond', Garamond, serif",
+              fontWeight: 600,
+              letterSpacing: 0.5,
+              textTransform: "uppercase",
+            }}
+          >
+            <span style={{ width: 200, flexShrink: 0 }}>Dimension</span>
+            <span style={{ flex: 1 }}>Measurements</span>
+          </div>
+
+          {structure.dimensions.map((dim, i) => (
+            <DimensionRow
+              key={dim.id}
+              dim={dim}
+              onChange={(d) => updateDim(i, d)}
+              onRemove={() => removeDim(i)}
+            />
+          ))}
+
+          <button
+            onClick={addDim}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "5px 12px",
+              border: "1px dashed #b8a590",
+              borderRadius: 4,
+              background: "transparent",
+              color: "#7a5c47",
+              fontFamily: "'EB Garamond', Garamond, serif",
+              fontSize: 13,
+              cursor: "pointer",
+              marginTop: 4,
+            }}
+            onMouseEnter={(e) => (e.target.style.background = "#f5efe8")}
+            onMouseLeave={(e) => (e.target.style.background = "transparent")}
+          >
+            + Add dimension
+          </button>
+
+          {/* Live n-count summary */}
+          {(() => {
+            const counts = structure.dimensions
+              .filter((d) => d.label.trim())
+              .map((d) => ({ label: d.label, n: parseValues(d.values).length }))
+              .filter((c) => c.n > 0);
+            if (counts.length === 0) return null;
+            return (
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: "7px 10px",
+                  background: "#f5efe8",
+                  borderRadius: 4,
+                  border: "1px solid #e0d6ca",
+                  fontSize: 12,
+                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                  color: "#7a5c47",
+                  lineHeight: 1.6,
+                }}
+              >
+                <span style={{ fontFamily: "'EB Garamond', Garamond, serif", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginRight: 8, color: "#8a7060" }}>
+                  Sample sizes:
+                </span>
+                {counts.map((c, i) => (
+                  <span key={i}>
+                    {i > 0 && <span style={{ color: "#b8a590" }}> · </span>}
+                    {c.label} <span style={{ fontWeight: 600, color: "#5c4033" }}>n={c.n}</span>
+                  </span>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main App ──────────────────────────────────────────────────────────────────
+
+function FungalMorphometrics() {
+  const [speciesName, setSpeciesName] = useState("");
+  const [structures, setStructures] = useState([]);
+  const [outputParts, setOutputParts] = useState([]);
+  const [outputPlain, setOutputPlain] = useState("");
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [showGuide, setShowGuide] = useState(false);
+  const outputRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  const loadExample = () => {
+    const ex = getExampleData();
+    setSpeciesName(ex.speciesName);
+    setStructures(ex.structures);
+    setNotes(ex.notes);
+    // Auto-compute results so user sees output immediately
+    const { parts, plain } = computeAnalysis(ex.speciesName, ex.structures, ex.notes);
+    setOutputParts(parts);
+    setOutputPlain(plain);
+    setShowGuide(false);
+  };
+
+  // ── Save project to JSON file ──
+  const saveProject = () => {
+    const project = { speciesName, structures, notes, version: 1 };
+    const blob = new Blob([JSON.stringify(project, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const safeName = speciesName.trim()
+      ? speciesName.trim().replace(/[^a-zA-Z0-9._\- ]/g, "").replace(/\s+/g, "_")
+      : "untitled_project";
+    a.href = url;
+    a.download = `${safeName}.morpho.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ── Load project from JSON file ──
+  const loadProject = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const project = JSON.parse(ev.target.result);
+        if (project.speciesName !== undefined) setSpeciesName(project.speciesName);
+        if (Array.isArray(project.structures)) setStructures(project.structures);
+        if (project.notes !== undefined) setNotes(project.notes);
+        setOutputParts([]);
+        setOutputPlain("");
+      } catch {
+        alert("Could not read project file. Please check it is a valid .morpho.json file.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const addStructure = useCallback(
+    (name = "", dims = ["Length", "Width"], calcQ = false) => {
+      setStructures((prev) => [
+        ...prev,
+        {
+          id: uid(),
+          name,
+          description: "",
+          calcQ,
+          dimensions: dims.map((d) => ({ id: uid(), label: d, values: "" })),
+        },
+      ]);
+    },
+    []
+  );
+
+  const addBlank = () => addStructure("", [""], false);
+
+  const updateStructure = (idx, updated) => {
+    setStructures((prev) => prev.map((s, i) => (i === idx ? updated : s)));
+  };
+
+  const removeStructure = (idx) => setStructures((prev) => prev.filter((_, i) => i !== idx));
+
+  const moveStructure = (idx, dir) => {
+    setStructures((prev) => {
+      const arr = [...prev];
+      const j = idx + dir;
+      if (j < 0 || j >= arr.length) return arr;
+      [arr[idx], arr[j]] = [arr[j], arr[idx]];
+      return arr;
+    });
+  };
+
+  // ── Core analysis logic (accepts data directly) ──
+  const computeAnalysis = (name, structs, notesStr) => {
+    const parts = [];
+    const plainParts = [];
+    if (name.trim()) {
+      parts.push({ type: "header", text: name.trim() });
+      plainParts.push(`── ${name.trim()} ──\n`);
+    }
+    for (const s of structs) {
+      if (!s.name.trim()) continue;
+      const r = analyzeStructure(s);
+      const desc = (s.description || "").trim();
+      const hasStats = r && r.results.length > 0;
+      const stats = hasStats ? r.results.join("; ") : "";
+
+      if (!desc && !hasStats) continue;
+
+      let line;
+      if (desc && hasStats) {
+        const cleanDesc = desc.replace(/[;.\s]+$/, "");
+        line = `${cleanDesc}; ${stats}.`;
+      } else if (desc) {
+        line = `${desc.replace(/[.\s]+$/, "")}.`;
+      } else {
+        line = `${stats}.`;
+      }
+      parts.push({ type: "entry", name: s.name, body: line });
+      plainParts.push(`${s.name} ${line}`);
+    }
+
+    if (notesStr && notesStr.trim()) {
+      plainParts.push(`\nNotes:\n${notesStr.trim()}`);
+    }
+
+    return { parts, plain: plainParts.join("\n") };
+  };
+
+  const runAnalysis = () => {
+    const { parts, plain } = computeAnalysis(speciesName, structures, notes);
+    setOutputParts(parts);
+    setOutputPlain(plain);
+  };
+
+  const copyOutput = () => {
+    navigator.clipboard.writeText(outputPlain).catch(() => {});
+  };
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "linear-gradient(180deg, #f5efe8 0%, #ede4d8 100%)",
+        fontFamily: "'EB Garamond', Garamond, 'Times New Roman', serif",
+        color: "#3d2b1f",
+      }}
+    >
+
+      {/* Header */}
+      <header
+        style={{
+          background: "linear-gradient(135deg, #3d2b1f 0%, #5c4033 60%, #7a5c47 100%)",
+          padding: "28px 24px 22px",
+          borderBottom: "3px solid #d4a574",
+        }}
+      >
+        <div style={{ maxWidth: 960, margin: "0 auto" }}>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 30,
+              fontWeight: 700,
+              color: "#f5efe8",
+              letterSpacing: 1,
+              lineHeight: 1.2,
+            }}
+          >
+            Fungal Morphometrics
+          </h1>
+          <p style={{ margin: "6px 0 0", fontSize: 15, color: "#d4a574", letterSpacing: 0.5, fontStyle: "italic" }}>
+            Micromorphological measurement statistics for taxonomic descriptions
+          </p>
+          <button
+            onClick={() => setShowGuide(!showGuide)}
+            style={{
+              marginTop: 10,
+              padding: "5px 16px",
+              background: showGuide ? "rgba(212,165,116,0.25)" : "transparent",
+              color: "#d4a574",
+              border: "1px solid rgba(212,165,116,0.5)",
+              borderRadius: 5,
+              fontFamily: "'EB Garamond', Garamond, serif",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              letterSpacing: 0.3,
+            }}
+          >
+            {showGuide ? "✕ Close Guide" : "? User Guide & Example"}
+          </button>
+        </div>
+      </header>
+
+      <main style={{ maxWidth: 960, margin: "0 auto", padding: "24px 16px 60px" }}>
+        {/* User Guide */}
+        {showGuide && <UserGuide onClose={() => setShowGuide(false)} onLoadExample={loadExample} />}
+
+        {/* Species Name */}
+        <div style={{ marginBottom: 20 }}>
+          <label
+            style={{
+              display: "block",
+              fontSize: 13,
+              fontWeight: 600,
+              letterSpacing: 0.5,
+              textTransform: "uppercase",
+              color: "#7a5c47",
+              marginBottom: 6,
+            }}
+          >
+            Species / Collection
+          </label>
+          <input
+            type="text"
+            value={speciesName}
+            onChange={(e) => setSpeciesName(e.target.value)}
+            placeholder="e.g. Gymnopilus sp. nov. — JME-2024-0031"
+            style={{
+              width: "100%",
+              padding: "10px 14px",
+              border: "1px solid #b8a590",
+              borderRadius: 6,
+              background: "#fffcf8",
+              fontFamily: "'EB Garamond', Garamond, serif",
+              fontSize: 18,
+              fontStyle: "italic",
+              color: "#3d2b1f",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
+
+        {/* Project Save/Load */}
+        <div style={{ display: "flex", gap: 10, marginBottom: 20, alignItems: "center" }}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,.morpho.json"
+            onChange={loadProject}
+            style={{ display: "none" }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              padding: "7px 16px",
+              background: "transparent",
+              color: "#5c4033",
+              border: "1px solid #b8a590",
+              borderRadius: 6,
+              fontFamily: "'EB Garamond', Garamond, serif",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              letterSpacing: 0.3,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+            onMouseEnter={(e) => (e.target.style.background = "#f5efe8")}
+            onMouseLeave={(e) => (e.target.style.background = "transparent")}
+          >
+            ↑ Load Project
+          </button>
+          <button
+            onClick={saveProject}
+            style={{
+              padding: "7px 16px",
+              background: "transparent",
+              color: "#5c4033",
+              border: "1px solid #b8a590",
+              borderRadius: 6,
+              fontFamily: "'EB Garamond', Garamond, serif",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              letterSpacing: 0.3,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+            onMouseEnter={(e) => (e.target.style.background = "#f5efe8")}
+            onMouseLeave={(e) => (e.target.style.background = "transparent")}
+          >
+            ↓ Save Project
+          </button>
+          <span style={{ fontSize: 12, color: "#a0937e", fontStyle: "italic" }}>
+            .morpho.json
+          </span>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 10,
+            marginBottom: 20,
+            alignItems: "center",
+          }}
+        >
+          <button
+            onClick={addBlank}
+            style={{
+              padding: "8px 18px",
+              background: "#5c4033",
+              color: "#f5efe8",
+              border: "none",
+              borderRadius: 6,
+              fontFamily: "'EB Garamond', Garamond, serif",
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: "pointer",
+              letterSpacing: 0.3,
+            }}
+            onMouseEnter={(e) => (e.target.style.background = "#7a5c47")}
+            onMouseLeave={(e) => (e.target.style.background = "#5c4033")}
+          >
+            + Blank Structure
+          </button>
+
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => setShowTemplates(!showTemplates)}
+              style={{
+                padding: "8px 18px",
+                background: "transparent",
+                color: "#5c4033",
+                border: "1px solid #b8a590",
+                borderRadius: 6,
+                fontFamily: "'EB Garamond', Garamond, serif",
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+                letterSpacing: 0.3,
+              }}
+              onMouseEnter={(e) => (e.target.style.background = "#f5efe8")}
+              onMouseLeave={(e) => (e.target.style.background = "transparent")}
+            >
+              + From Template ▾
+            </button>
+            {showTemplates && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  marginTop: 4,
+                  background: "#fff",
+                  border: "1px solid #b8a590",
+                  borderRadius: 6,
+                  boxShadow: "0 6px 20px rgba(61,43,31,0.15)",
+                  zIndex: 30,
+                  minWidth: 240,
+                  overflow: "hidden",
+                }}
+              >
+                {SUGGESTED_STRUCTURES.map((t) => (
+                  <div
+                    key={t.name}
+                    onClick={() => {
+                      addStructure(t.name, t.dims.length > 0 ? t.dims : [""], t.calcQ);
+                      setShowTemplates(false);
+                    }}
+                    style={{
+                      padding: "9px 14px",
+                      cursor: "pointer",
+                      borderBottom: "1px solid #eee8df",
+                      fontSize: 14,
+                      color: "#3d2b1f",
+                    }}
+                    onMouseEnter={(e) => (e.target.style.background = "#f5efe8")}
+                    onMouseLeave={(e) => (e.target.style.background = "#fff")}
+                  >
+                    <span style={{ fontWeight: 600 }}>{t.name}</span>
+                    <span style={{ color: "#8a7060", fontSize: 12, marginLeft: 8, fontStyle: t.dims.length === 0 ? "italic" : "normal" }}>
+                      {t.dims.length > 0 ? t.dims.join(", ") : "description only"}
+                    </span>
+                  </div>
+                ))}
+                <div
+                  onClick={() => {
+                    SUGGESTED_STRUCTURES.forEach((t) => addStructure(t.name, t.dims.length > 0 ? t.dims : [""], t.calcQ));
+                    setShowTemplates(false);
+                  }}
+                  style={{
+                    padding: "9px 14px",
+                    cursor: "pointer",
+                    fontSize: 14,
+                    color: "#7a5c47",
+                    fontWeight: 600,
+                    background: "#faf6f1",
+                  }}
+                  onMouseEnter={(e) => (e.target.style.background = "#f0e8dc")}
+                  onMouseLeave={(e) => (e.target.style.background = "#faf6f1")}
+                >
+                  ✦ Add all templates
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ flex: 1 }} />
+
+          <button
+            onClick={runAnalysis}
+            disabled={structures.length === 0}
+            style={{
+              padding: "8px 28px",
+              background: structures.length > 0 ? "#a0462e" : "#c9b9a8",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              fontFamily: "'EB Garamond', Garamond, serif",
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: structures.length > 0 ? "pointer" : "default",
+              letterSpacing: 0.5,
+            }}
+            onMouseEnter={(e) => {
+              if (structures.length > 0) e.target.style.background = "#b8553a";
+            }}
+            onMouseLeave={(e) => {
+              if (structures.length > 0) e.target.style.background = "#a0462e";
+            }}
+          >
+            Compute Statistics
+          </button>
+        </div>
+
+        {/* Structure Cards */}
+        {structures.length === 0 && (
+          <div
+            style={{
+              textAlign: "center",
+              padding: "48px 20px",
+              color: "#8a7060",
+              fontSize: 16,
+              border: "2px dashed #c9b9a8",
+              borderRadius: 10,
+              marginBottom: 20,
+            }}
+          >
+            <p style={{ margin: "0 0 6px", fontSize: 20, fontWeight: 600 }}>No structures yet</p>
+            <p style={{ margin: 0, fontStyle: "italic" }}>
+              Add a blank structure or choose from the templates above to get started.
+            </p>
+          </div>
+        )}
+
+        {structures.map((s, i) => (
+          <StructureCard
+            key={s.id}
+            structure={s}
+            onUpdate={(u) => updateStructure(i, u)}
+            onRemove={() => removeStructure(i)}
+            onMoveUp={() => moveStructure(i, -1)}
+            onMoveDown={() => moveStructure(i, 1)}
+            isFirst={i === 0}
+            isLast={i === structures.length - 1}
+          />
+        ))}
+
+        {/* Output */}
+        {outputParts.length > 0 && (
+          <div
+            ref={outputRef}
+            style={{
+              marginTop: 24,
+              border: "1px solid #b8a590",
+              borderRadius: 8,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 14px",
+                background: "linear-gradient(135deg, #3d2b1f, #5c4033)",
+              }}
+            >
+              <span style={{ color: "#f5efe8", fontWeight: 600, fontSize: 15, letterSpacing: 0.5 }}>
+                Results
+              </span>
+              <button
+                onClick={copyOutput}
+                style={{
+                  padding: "4px 14px",
+                  background: "rgba(255,255,255,0.15)",
+                  color: "#f5efe8",
+                  border: "1px solid rgba(255,255,255,0.25)",
+                  borderRadius: 4,
+                  fontFamily: "'EB Garamond', Garamond, serif",
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => (e.target.style.background = "rgba(255,255,255,0.25)")}
+                onMouseLeave={(e) => (e.target.style.background = "rgba(255,255,255,0.15)")}
+              >
+                Copy to clipboard
+              </button>
+            </div>
+            <div
+              style={{
+                margin: 0,
+                padding: "16px 18px",
+                background: "#fffcf8",
+                fontFamily: "'EB Garamond', Garamond, serif",
+                fontSize: 15,
+                lineHeight: 1.8,
+                color: "#3d2b1f",
+              }}
+            >
+              {outputParts.map((part, i) =>
+                part.type === "header" ? (
+                  <div
+                    key={i}
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 600,
+                      fontStyle: "italic",
+                      marginBottom: 12,
+                      paddingBottom: 8,
+                      borderBottom: "1px solid #d4ccc0",
+                      color: "#5c4033",
+                    }}
+                  >
+                    {part.text}
+                  </div>
+                ) : (
+                  <p key={i} style={{ margin: "0 0 10px", textIndent: 0 }}>
+                    <strong style={{ fontStyle: "italic", fontWeight: 600 }}>{part.name}</strong>
+                    {" "}{part.body}
+                  </p>
+                )
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Notes */}
+        <div style={{ marginTop: 24 }}>
+          <label
+            style={{
+              display: "block",
+              fontSize: 13,
+              fontWeight: 600,
+              letterSpacing: 0.5,
+              textTransform: "uppercase",
+              color: "#7a5c47",
+              marginBottom: 6,
+            }}
+          >
+            Notes
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Miscellaneous notes — ecology, phenology, habitat, collection details, reagent reactions, observations…"
+            rows={5}
+            style={{
+              width: "100%",
+              padding: "12px 14px",
+              border: "1px solid #b8a590",
+              borderRadius: 6,
+              background: "#fffcf8",
+              fontFamily: "'EB Garamond', Garamond, serif",
+              fontSize: 15,
+              color: "#3d2b1f",
+              resize: "vertical",
+              boxSizing: "border-box",
+              lineHeight: 1.6,
+            }}
+          />
+        </div>
+
+        {/* Footer */}
+        <footer style={{ marginTop: 40, textAlign: "center", color: "#a0937e", fontSize: 13, fontStyle: "italic" }}>
+          IQR method for outlier detection · Outliers shown in parentheses · Condensed L × W format when only length &amp; width
+        </footer>
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<FungalMorphometrics />);
+  </script>
+</body>
+</html>
